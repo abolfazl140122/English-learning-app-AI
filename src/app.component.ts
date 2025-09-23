@@ -32,6 +32,9 @@ const translations = {
     typeYourMessage: 'Type your message...',
     clearChat: 'Clear Chat',
     confirmClearChat: 'Are you sure you want to clear the entire conversation?',
+    connecting: 'Connecting to AI...',
+    toggleThemeLight: 'Switch to Light Theme',
+    toggleThemeDark: 'Switch to Dark Theme',
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -43,20 +46,28 @@ const translations = {
     typeYourMessage: 'پیام خود را تایپ کنید...',
     clearChat: 'پاک کردن گفتگو',
     confirmClearChat: 'آیا از پاک کردن کل گفتگو مطمئن هستید؟',
+    connecting: 'در حال آماده سازی هوش مصنوعی',
+    toggleThemeLight: 'تغییر به تم روشن',
+    toggleThemeDark: 'تغییر به تم تاریک',
   },
 };
+
+type Theme = 'light' | 'dark';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    'class': 'flex items-center justify-center h-screen p-0 sm:p-4',
+    '[class]': `appState() === 'chatting'
+      ? 'flex justify-center h-screen w-full'
+      : 'flex items-center justify-center h-screen p-4'`,
   },
 })
 export class AppComponent {
   appState = signal<'loading' | 'languageSelection' | 'onboarding' | 'chatting'>('loading');
   uiLanguage = signal<'en' | 'fa'>('en');
+  theme = signal<Theme>('dark');
   userName = signal<string>('');
   messages = signal<Message[]>([]);
   userInput = signal<string>('');
@@ -71,6 +82,8 @@ export class AppComponent {
   private sanitizer = inject(DomSanitizer);
 
   constructor() {
+    this.initializeTheme();
+
     // Show loading screen for a bit for aesthetic purposes
     setTimeout(() => {
       const storedName = localStorage.getItem('userName');
@@ -105,6 +118,27 @@ export class AppComponent {
         localStorage.setItem('chatHistory', JSON.stringify(this.messages()));
       }
     });
+    
+    // Effect to apply theme class to document
+    effect(() => {
+      const currentTheme = this.theme();
+      if (currentTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem('theme', currentTheme);
+    });
+  }
+
+  initializeTheme() {
+    const storedTheme = localStorage.getItem('theme') as Theme | null;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    this.theme.set(storedTheme || (prefersDark ? 'dark' : 'light'));
+  }
+
+  toggleTheme() {
+    this.theme.update(current => (current === 'dark' ? 'light' : 'dark'));
   }
 
   selectLanguage(lang: 'en' | 'fa'): void {
@@ -231,7 +265,8 @@ export class AppComponent {
     if (confirm(this.t().confirmClearChat)) {
       this.messages.set([]);
       localStorage.removeItem('chatHistory');
-      this.startInitialConversation();
+      // Re-initialize the chat to get a fresh session.
+      this.initializeChat();
     }
   }
 
