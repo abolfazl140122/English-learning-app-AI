@@ -1,25 +1,174 @@
-<div class="bg-gradient-to-br from-gray-50 to-gray-200 rounded-2xl shadow-2xl p-8 text-center w-full max-w-md border border-gray-300 transform transition-all duration-500 hover:scale-105">
-  <header class="mb-6">
-    <h1 class="text-4xl font-bold text-slate-800">
-      Gemini Greeting
-    </h1>
-  </header>
-
-  <main class="min-h-[120px] flex items-center justify-center">
-    @if (isLoading()) {
-      <div class="flex flex-col items-center text-gray-600 space-y-3">
-        <!-- Spinner -->
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
-        <span class="text-sm">Generating a warm welcome...</span>
+@switch (appState()) {
+  @case ('loading') {
+    <div class="flex flex-col items-center justify-center h-full w-full bg-gray-900 text-indigo-300 transition-opacity duration-500">
+      <svg viewBox="0 0 100 100" class="w-32 h-32">
+        <!-- Static outer circle -->
+        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="1"></circle>
+        
+        <!-- Pulsating glow effect -->
+        <circle cx="50" cy="50" r="40" fill="none" stroke="#C7D2FE" stroke-width="2">
+          <animate attributeName="r" from="40" to="45" dur="2s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" values="40; 45; 40"/>
+          <animate attributeName="stroke-opacity" from="0.5" to="0" dur="2s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.3, 0.61, 0.355, 1" keyTimes="0; 1" values="0.5; 0; 0.5"/>
+        </circle>
+  
+        <!-- Rotating dashed circle -->
+        <circle cx="50" cy="50" r="35" fill="none" stroke="#818CF8" stroke-width="1.5" stroke-dasharray="10 5" stroke-linecap="round">
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="0 50 50"
+            to="360 50 50"
+            dur="8s"
+            repeatCount="indefinite"
+          />
+        </circle>
+        
+         <!-- Rotating inner dashed circle (opposite direction) -->
+        <circle cx="50" cy="50" r="25" fill="none" stroke="#A5B4FC" stroke-width="1" stroke-dasharray="2 4" stroke-linecap="round">
+           <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="360 50 50"
+            to="0 50 50"
+            dur="6s"
+            repeatCount="indefinite"
+            />
+        </circle>
+  
+        <!-- Central pulsating core -->
+        <circle cx="50" cy="50" r="10" fill="#6366F1">
+           <animate attributeName="r" from="8" to="10" dur="1.5s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" values="8; 10; 8"/>
+        </circle>
+      </svg>
+      <p class="mt-6 text-lg font-light text-gray-300 tracking-widest animate-pulse">... در حال برقراری ارتباط</p>
+    </div>
+  }
+  @case ('languageSelection') {
+    <div class="flex flex-col items-center justify-center h-full w-full max-w-md mx-auto p-8">
+      <div class="w-full bg-white p-8 rounded-2xl shadow-lg text-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Choose Language</h1>
+        <p class="text-gray-600 mb-8">زبان خود را انتخاب کنید</p>
+        <div class="flex flex-col space-y-4">
+          <button (click)="selectLanguage('en')" class="w-full bg-indigo-500 text-white rounded-full py-3 font-semibold hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200">
+            English
+          </button>
+          <button (click)="selectLanguage('fa')" class="w-full bg-green-500 text-white rounded-full py-3 font-semibold hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200">
+            فارسی
+          </button>
+        </div>
       </div>
-    } @else if (error()) {
-      <p class="font-bold">Oops! Something went wrong.</p>
-    } @else {
-      <blockquote class="relative">
-        <p class="text-2xl lg:text-3xl font-serif italic text-gray-700 leading-relaxed z-10 relative px-4">
-         {{ greeting() }}
-        </p>
-      </blockquote>
-    }
-  </main>
-</div>
+    </div>
+  }
+  @case ('onboarding') {
+    <div class="flex flex-col items-center justify-center h-full w-full max-w-md mx-auto p-8" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <div class="w-full bg-white p-8 rounded-2xl shadow-lg text-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">{{ t().welcome }}</h1>
+        <p class="text-gray-600 mb-8">{{ t().whatToCallYou }}</p>
+        <form (submit)="handleNameSubmit($event)" class="w-full">
+          <input
+            #nameInput
+            type="text"
+            [placeholder]="t().enterYourName"
+            class="w-full px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow duration-200 text-center"
+            required
+          >
+          <button type="submit" class="w-full mt-4 bg-indigo-500 text-white rounded-full py-3 font-semibold hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200">
+            {{ t().letsStart }}
+          </button>
+        </form>
+      </div>
+    </div>
+  }
+  @case ('chatting') {
+    <div class="flex flex-col h-full w-full max-w-2xl mx-auto bg-white shadow-lg rounded-lg" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <!-- Header -->
+      <header class="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+        <div class="flex items-center">
+            <div class="w-12 h-12 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-xl" [class.mr-4]="uiLanguage() === 'en'" [class.ml-4]="uiLanguage() === 'fa'">
+              AI
+            </div>
+            <div>
+              <h1 class="text-xl font-bold text-gray-800">{{ t().aiAssistant }}</h1>
+              <p class="text-sm text-green-500 flex items-center">
+                <span class="w-2 h-2 bg-green-500 rounded-full" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'"></span>
+                {{ t().online }}
+              </p>
+            </div>
+        </div>
+        <button (click)="clearChat()" class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full" [title]="t().clearChat">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </header>
+    
+      <!-- Messages Area -->
+      <main #chatContainer class="flex-1 p-6 overflow-y-auto">
+        <div class="flex flex-col space-y-4">
+          @for (message of messages(); track $index) {
+            <div class="flex" [class.justify-end]="message.role === 'user'">
+              @if (message.role === 'model') {
+                <div class="flex items-end max-w-lg">
+                  <div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm mr-2 flex-shrink-0" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+                    AI
+                  </div>
+                  <div class="bg-gray-200 text-gray-800 p-3 rounded-lg rounded-bl-none">
+                    <p class="text-sm prose prose-sm max-w-none" [innerHTML]="renderMessage(message.text)" dir="rtl"></p>
+                  </div>
+                </div>
+              } @else {
+                <div class="bg-indigo-500 text-white p-3 rounded-lg rounded-br-none max-w-lg">
+                  <p class="text-sm">{{ message.text }}</p>
+                </div>
+              }
+            </div>
+          }
+    
+          @if (isLoading()) {
+            <div class="flex items-end max-w-lg">
+               <div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm mr-2 flex-shrink-0" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+                AI
+              </div>
+              <div class="bg-gray-200 text-gray-800 p-3 rounded-lg rounded-bl-none">
+                <div class="flex items-center justify-center space-x-1">
+                  <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div class="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </main>
+    
+      <!-- Input Area -->
+      <footer class="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+        @if (error()) {
+          <div class="text-red-500 text-sm mb-2 text-center p-2 bg-red-100 rounded-md">
+            <p><strong>Error:</strong> {{ error() }}</p>
+          </div>
+        }
+        <div class="flex items-center space-x-3">
+          <input
+            type="text"
+            [placeholder]="t().typeYourMessage"
+            class="flex-1 w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow duration-200"
+            [value]="userInput()"
+            (input)="onUserInput($event)"
+            (keyup.enter)="sendMessage()"
+            [disabled]="isLoading()"
+          />
+          <button
+            class="bg-indigo-500 text-white rounded-full p-3 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
+            (click)="sendMessage()"
+            [disabled]="isLoading() || !userInput()">
+            <!-- Send Icon SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+            </svg>
+          </button>
+        </div>
+      </footer>
+    </div>
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "اپلیکیشن آموزش زبان انگلیسی AI",
-  "description": "Example Angular app using Gemini",
+  "name": "اپلیکیشن تمرین مکالمه انگلیسی با هوش مصنوعی",
+  "description": "An Angular application for practicing English conversation with an AI tutor powered by the Gemini API.",
   "requestFramePermissions": []
 }

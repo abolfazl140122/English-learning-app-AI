@@ -1,5 +1,5 @@
 {
-  "name": "اپلیکیشن-آموزش-زبان-انگلیسی-ai",
+  "name": "اپلیکیشن-تمرین-مکالمه-انگلیسی-با-هوش-مصنوعی",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,6 +14,7 @@
     "@angular/platform-browser": "^20.1.0",
     "@angular/core": "^20.1.0",
     "@angular/compiler": "^20.1.0",
+    "marked": "^16.3.0",
     "@angular/build": "^20.1.0",
     "@angular/cli": "^20.1.0",
     "@angular/common": "^20.1.0",
