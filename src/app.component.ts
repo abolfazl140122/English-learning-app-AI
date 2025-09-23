@@ -26,6 +26,19 @@ interface HomeContent {
   challenge: string;
 }
 
+interface QuizQuestion {
+  question: string;
+  options: string[];
+  correct_answer: string;
+}
+
+type EnglishLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
+interface TestResult {
+  level: EnglishLevel;
+  feedback: string;
+}
+
 const translations = {
   en: {
     welcome: 'Welcome!',
@@ -52,6 +65,16 @@ const translations = {
     practiceConversation: 'Practice Conversation',
     vocabularyQuiz: 'Vocabulary Quiz',
     comingSoon: 'Coming Soon',
+    placementTest: 'Placement Test',
+    selectCorrectAnswer: 'Choose the best option to complete the sentence.',
+    nextQuestion: 'Next Question',
+    finishTest: 'Finish Test',
+    testComplete: 'Test Complete!',
+    yourLevelIs: "We've determined your level is:",
+    startLearning: "Let's Start Learning!",
+    generatingTest: 'Generating Your Test...',
+    evaluatingTest: 'Evaluating Your Answers...',
+    pleaseWait: 'This will just take a moment.',
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -78,11 +101,22 @@ const translations = {
     practiceConversation: 'تمرین مکالمه',
     vocabularyQuiz: 'آزمون واژگان',
     comingSoon: 'به زودی',
+    placementTest: 'آزمون تعیین سطح',
+    selectCorrectAnswer: 'بهترین گزینه را برای تکمیل جمله انتخاب کنید.',
+    nextQuestion: 'سوال بعدی',
+    finishTest: 'پایان آزمون',
+    testComplete: 'آزمون تمام شد!',
+    yourLevelIs: 'سطح شما مشخص شد:',
+    startLearning: 'بزن بریم یاد بگیریم!',
+    generatingTest: 'در حال ساخت آزمون شما...',
+    evaluatingTest: 'در حال تحلیل پاسخ‌های شما...',
+    pleaseWait: 'این کار فقط یک لحظه طول می‌کشد.',
   },
 };
 
 type Theme = 'light' | 'dark';
-type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'home' | 'chatting';
+type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'placementTest' | 'home' | 'chatting';
+type PlacementTestState = 'generating' | 'taking' | 'evaluating' | 'results';
 
 @Component({
   selector: 'app-root',
@@ -110,7 +144,18 @@ export class AppComponent {
   homeIsLoading = signal<boolean>(false);
   homeError = signal<string | null>(null);
 
+  // Placement Test State
+  englishLevel = signal<EnglishLevel | null>(null);
+  placementTestState = signal<PlacementTestState>('generating');
+  testQuestions = signal<QuizQuestion[]>([]);
+  currentQuestionIndex = signal<number>(0);
+  userAnswers = signal<(string | null)[]>([]);
+  selectedAnswer = signal<string | null>(null);
+  testResult = signal<TestResult | null>(null);
+
   t = computed(() => translations[this.uiLanguage()]);
+  currentQuestion = computed(() => this.testQuestions()[this.currentQuestionIndex()]);
+  testProgress = computed(() => this.testQuestions().length > 0 ? ((this.currentQuestionIndex()) / this.testQuestions().length) * 100 : 0);
 
   private chat!: Chat;
   private ai!: GoogleGenAI;
@@ -121,12 +166,18 @@ export class AppComponent {
 
     setTimeout(() => {
       const storedName = localStorage.getItem('userName');
-      const storedLang = localStorage.getItem('uiLanguage');
+      const storedLang = localStorage.getItem('uiLanguage') as 'en' | 'fa' | null;
+      const storedLevel = localStorage.getItem('englishLevel') as EnglishLevel | null;
 
-      if (storedName && (storedLang === 'en' || storedLang === 'fa')) {
+      if (storedName && storedLang) {
         this.userName.set(storedName);
         this.uiLanguage.set(storedLang);
-        this.appState.set('home');
+        if (storedLevel) {
+          this.englishLevel.set(storedLevel);
+          this.appState.set('home');
+        } else {
+          this.appState.set('placementTest');
+        }
       } else {
         this.appState.set('languageSelection');
       }
@@ -145,6 +196,9 @@ export class AppComponent {
       }
       if (state === 'home' && !this.homeContent() && !this.homeIsLoading()) {
         this.loadHomeContent();
+      }
+      if (state === 'placementTest' && this.testQuestions().length === 0) {
+        this.generatePlacementTest();
       }
     });
     
@@ -195,17 +249,18 @@ export class AppComponent {
         this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
     }
 
-    const systemInstruction = `You are a highly advanced and eloquent AI companion. The user, named ${this.userName()}, is communicating with you. Your primary directive is to engage in thoughtful and enriching conversations, conducted exclusively in Persian (Farsi).
-    Core Persona:
-    - **Knowledgeable & Eloquent:** Use a rich and diverse vocabulary. Your responses should be well-structured, clear, and demonstrate a deep understanding of the topic.
-    - **Supportive & Patient:** Be encouraging and create a positive conversational environment. Never be judgmental.
-    - **Naturally Inquisitive:** Ask open-ended, thought-provoking questions to encourage deeper conversation and help the user explore their thoughts.
-    - **Emotionally Intelligent:** Use emojis tastefully to convey warmth and personality, making the interaction feel more human and less robotic.
-    Communication Rules:
-    - **Language:** You MUST ALWAYS respond in Persian (Farsi), no matter the input language.
-    - **Greeting:** Begin your very first message by warmly greeting the user by their name, ${this.userName()}.
-    - **Formatting:** Use Markdown for formatting (like bolding key terms or using lists) to improve readability.
-    - **Clarity:** Avoid technical jargon unless it's relevant and explained. The goal is clear, beautiful communication.`;
+    const systemInstruction = `You are a friendly and supportive AI English tutor. The user you are talking to is named ${this.userName()}, and their estimated English proficiency is ${this.englishLevel()}.
+
+    Core Directives:
+    - Language: All your responses MUST be in English.
+    - Adaptability: Tailor the complexity of your vocabulary and sentence structures to the user's ${this.englishLevel()} level.
+      - For Beginners: Use simple words, short sentences, and ask clear, direct questions.
+      - For Intermediate: Introduce more nuanced vocabulary and slightly more complex sentences. Encourage them to elaborate.
+      - For Advanced: Engage in deep, complex conversations. Feel free to use idiomatic expressions (and explain them if necessary).
+    - Corrections: Gently correct major grammatical mistakes. Don't interrupt the flow of conversation for minor errors. Phrase corrections positively, for example: "That's a great point! A slightly more natural way to say that would be..."
+    - Encouragement: Be positive and encouraging. Praise their effort.
+    - Formatting: Use Markdown for formatting (like bolding key terms or using lists) to improve readability.
+    - Greeting: Begin your very first message in a new conversation with a friendly greeting, like "Hi ${this.userName()}! Ready to practice some English today?".`;
       
     this.chat = this.ai.chats.create({
       model: 'gemini-2.5-flash',
@@ -216,7 +271,19 @@ export class AppComponent {
     if (storedHistory && JSON.parse(storedHistory).length > 0) {
       this.messages.set(JSON.parse(storedHistory));
     } else {
-      // Don't send a message immediately, wait for user interaction in chat.
+       // Send initial greeting from AI
+      this.isLoading.set(true);
+      const result = await this.chat.sendMessageStream({ message: `Hi, please greet me.` });
+      this.messages.set([{ role: 'model', text: '' }]);
+      let streamingText = '';
+      for await (const chunk of result) {
+        streamingText += chunk.text;
+        this.messages.update(current => {
+          current[0].text = streamingText;
+          return [...current];
+        });
+      }
+      this.isLoading.set(false);
     }
   }
   
@@ -228,9 +295,126 @@ export class AppComponent {
     if (name) {
       localStorage.setItem('userName', name);
       this.userName.set(name);
-      this.appState.set('home');
+      this.appState.set('placementTest');
     }
   }
+
+  async generatePlacementTest(): Promise<void> {
+    this.homeError.set(null);
+    this.placementTestState.set('generating');
+    try {
+      if (!this.ai) {
+        this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      }
+
+      const schema = {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correct_answer: { type: Type.STRING },
+          },
+          required: ['question', 'options', 'correct_answer'],
+        },
+      };
+
+      const prompt = `You are an expert English language assessment creator. Generate a 5-question multiple-choice placement test to determine a user's English proficiency. The questions should cover grammar and vocabulary.
+- Create one question for each of the following CEFR levels, in this order: A1, A2, B1, B2, C1.
+- Each question must have a 'question' text, an array of exactly 4 string 'options', and the 'correct_answer' string which must be one of the options.
+- Respond ONLY with a valid JSON array adhering to the provided schema. Do not include any other text or markdown.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+
+      const questions = JSON.parse(response.text.trim());
+      this.testQuestions.set(questions);
+      this.placementTestState.set('taking');
+    } catch (e) {
+      this.handleError(e, 'home');
+    }
+  }
+
+  selectAnswer(answer: string): void {
+    this.selectedAnswer.set(answer);
+  }
+
+  submitAnswer(): void {
+    if (!this.selectedAnswer()) return;
+
+    this.userAnswers.update(answers => [...answers, this.selectedAnswer()]);
+    
+    if (this.currentQuestionIndex() < this.testQuestions().length - 1) {
+      this.currentQuestionIndex.update(i => i + 1);
+      this.selectedAnswer.set(null);
+    } else {
+      this.evaluateTest();
+    }
+  }
+
+  async evaluateTest(): Promise<void> {
+    this.placementTestState.set('evaluating');
+    this.homeError.set(null);
+    try {
+       const questionsAndAnswers = this.testQuestions().map((q, i) => ({
+        question: q.question,
+        correct_answer: q.correct_answer,
+        user_answer: this.userAnswers()[i]
+      }));
+
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+          level: { type: Type.STRING, enum: ['Beginner', 'Intermediate', 'Advanced'] },
+          feedback: { type: Type.STRING }
+        },
+        required: ['level', 'feedback']
+      };
+
+      const languageMap = { en: 'English', fa: 'Persian (Farsi)' };
+      const requestedLang = languageMap[this.uiLanguage()];
+
+      const prompt = `You are an expert English language assessment evaluator. A user has completed a placement test.
+      Here are the questions, correct answers, and the user's answers:
+      ${JSON.stringify(questionsAndAnswers)}
+      
+      Based on their performance, determine their English proficiency level. The level must be one of: 'Beginner', 'Intermediate', or 'Advanced'.
+      Also, provide a short, encouraging feedback message (max 30 words) for the user in ${requestedLang}.
+      
+      Respond ONLY with a valid JSON object with two keys: 'level' (the determined proficiency level) and 'feedback' (the feedback message). Do not include any other text or markdown.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      
+      const result = JSON.parse(response.text.trim()) as TestResult;
+      this.testResult.set(result);
+      this.englishLevel.set(result.level);
+      localStorage.setItem('englishLevel', result.level);
+      this.placementTestState.set('results');
+
+    } catch (e) {
+      this.handleError(e, 'home');
+      this.placementTestState.set('taking'); // Go back to test if evaluation fails
+    }
+  }
+
+  finishTestAndGoHome(): void {
+    this.appState.set('home');
+  }
+
 
   async loadHomeContent(): Promise<void> {
     if (!this.userName() || !process.env.API_KEY) {
@@ -270,10 +454,10 @@ export class AppComponent {
           required: ['tips', 'challenge']
         };
 
-        const prompt = `You are an AI assistant for an English learning app. The user's name is ${this.userName()} and their selected language is ${requestedLang}. Your task is to generate motivational and engaging content for the app's home screen, IN ${requestedLang}.
+        const prompt = `You are an AI assistant for an English learning app. The user's name is ${this.userName()}, their proficiency is ${this.englishLevel()}, and their selected UI language is ${requestedLang}. Your task is to generate motivational and engaging content for the app's home screen, IN ${requestedLang}.
 Provide the following in a JSON object:
-1. 'tips': An array of 3 'Daily Tips' for learning English. Each tip should have a 'title' and a 'description'. These tips should be concise and encouraging.
-2. 'challenge': A "Today's Challenge", which is a short paragraph presenting a simple, actionable task for the user to practice their English today.
+1. 'tips': An array of 3 'Daily Tips' for learning English, tailored to a ${this.englishLevel()} learner. Each tip should have a 'title' and a 'description'.
+2. 'challenge': A "Today's Challenge", which is a short, actionable task appropriate for a ${this.englishLevel()} user.
 
 Respond ONLY with a valid JSON object that adheres to the provided schema. Your entire response, including all text in the tips and challenge, MUST be in ${requestedLang}. Do not include any other text or markdown formatting.`;
 
@@ -303,23 +487,6 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
       return;
     }
     
-    if (this.messages().length === 0) {
-      // This is the first message from the user in a new chat. Let's get the AI's greeting.
-      this.isLoading.set(true);
-      const initialResult = await this.chat.sendMessageStream({ message: `Hello! Please introduce yourself.` });
-      this.messages.update(current => [...current, { role: 'model', text: '' }]);
-      let initialText = '';
-      for await (const chunk of initialResult) {
-        initialText += chunk.text;
-        this.messages.update(current => {
-          const lastMessage = current[current.length - 1];
-          lastMessage.text = initialText;
-          return [...current];
-        });
-      }
-      this.isLoading.set(false);
-    }
-
     this.messages.update(current => [
       ...current,
       { role: 'user', text: userMessageText },
@@ -357,8 +524,8 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
     if (confirm(this.t().confirmClearChat)) {
       this.messages.set([]);
       localStorage.removeItem('chatHistory');
-      // FIX: The 'config' property of a Chat object is private.
-      // Re-initializing the chat is the correct way to clear the conversation history.
+      // Re-initializing the chat is the correct way to clear the conversation history
+      // and get a new greeting.
       this.initializeChat();
     }
   }
