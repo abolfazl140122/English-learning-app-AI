@@ -52,37 +52,85 @@
   @case('home') {
     <div class="flex flex-col h-full w-full max-w-2xl mx-auto" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
       <!-- Main content area -->
-      <main class="flex-grow overflow-y-auto p-6">
+      <main class="flex-grow overflow-y-auto p-6 space-y-8">
         <!-- Header -->
-        <header class="mb-8">
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t().welcomeBack }}, {{ userName() }}!</h1>
-          <p class="text-gray-500 dark:text-gray-400">{{ t().learnSomethingNew }}</p>
+        <header class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t().welcomeBack }}, {{ userName() }}!</h1>
+            <p class="text-gray-500 dark:text-gray-400">{{ t().learnSomethingNew }}</p>
+          </div>
+          @if(userName()) {
+            <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl ring-2 ring-white/20">
+              {{ userName().charAt(0).toUpperCase() }}
+            </div>
+          }
         </header>
-        
+
         <!-- Loading Skeleton -->
         @if (homeIsLoading()) {
-          <div class="animate-pulse">
-            <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
-            <div class="flex overflow-hidden" [class.space-x-4]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
-              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
-              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
-              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+          <div class="animate-pulse space-y-8">
+            <!-- Challenge Skeleton -->
+            <div>
+              <div class="h-8 w-56 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="h-32 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+            </div>
+            <!-- Quick Actions Skeleton -->
+            <div>
+              <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="grid grid-cols-2 gap-4">
+                <div class="h-28 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+                <div class="h-28 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+              </div>
+            </div>
+            <!-- Tips Skeleton -->
+            <div>
+              <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="flex space-x-4 -mx-6 px-6">
+                <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+                <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+              </div>
             </div>
           </div>
-          <div class="animate-pulse mt-8">
-              <div class="h-8 w-56 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
-              <div class="h-24 bg-gray-300 dark:bg-slate-700 rounded-lg"></div>
-          </div>
         }
-  
+
         <!-- Home Content -->
         @if (homeContent(); as content) {
-          <!-- Scrolling Banner -->
+          <!-- Daily Challenge -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+               <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-indigo-500" [class.mr-3]="uiLanguage() === 'en'" [class.ml-3]="uiLanguage() === 'fa'" viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 2h-13A2.5 2.5 0 0 0 3 4.5v13.08a2.5 2.5 0 0 0 3.75 2.17L12 16.5l5.25 3.25a2.5 2.5 0 0 0 3.75-2.17V4.5A2.5 2.5 0 0 0 18.5 2ZM12 14.5l-4 2.5V5h8v12Z"/></svg>
+              <span>{{ t().todaysChallenge }}</span>
+            </h2>
+            <div class="p-6 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg shadow-indigo-500/30 dark:shadow-indigo-900/50 flex flex-col items-start">
+              <p class="text-lg font-medium mb-6">{{ content.challenge }}</p>
+              <button (click)="navigateTo('chatting')" class="mt-auto w-full bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full py-3 font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/50">
+                {{ t().startChallenge }}
+              </button>
+            </div>
+          </section>
+
+          <!-- Quick Actions -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().quickActions }}</h2>
+            <div class="grid grid-cols-2 gap-4">
+              <button (click)="navigateTo('chatting')" class="group p-4 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 text-center hover:border-indigo-300 dark:hover:border-indigo-600 hover:-translate-y-1 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mx-auto text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M21.75 12.003a9.75 9.75 0 0 1-9.75 9.75c-4.327 0-8.02-2.834-9.23-6.756a.75.75 0 0 1 1.458-.495A8.25 8.25 0 0 0 12 20.253a8.25 8.25 0 0 0 8.25-8.25c0-4.05-2.92-7.412-6.755-8.156a.75.75 0 0 1 .41-1.46A9.75 9.75 0 0 1 21.75 12.003Z"/><path d="M12.75 4.5a.75.75 0 0 0-1.5 0v3.75a.75.75 0 0 0 1.5 0V4.5Z"/><path d="M9.879 6.879a.75.75 0 1 0-1.06 1.06l2.121 2.121a.75.75 0 1 0 1.06-1.06L9.879 6.879Z"/><path d="M15.182 11.026a.75.75 0 0 0-1.06-1.06l-2.121 2.121a.75.75 0 0 0 1.06 1.06l2.121-2.121Z"/></svg>
+                <p class="font-semibold text-gray-800 dark:text-gray-200 mt-2">{{ t().practiceConversation }}</p>
+              </button>
+              <div class="group p-4 bg-white/40 dark:bg-gray-800/20 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 text-center cursor-not-allowed opacity-60">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mx-auto text-gray-400 dark:text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M15.75 2.25a.75.75 0 0 1 .75.75v5.034a.75.75 0 0 1-1.5 0V3.81a9.004 9.004 0 0 0-13.38 6.223a.75.75 0 0 1-1.494.156A10.503 10.503 0 0 1 15.75 2.25Z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M8.25 21.75a.75.75 0 0 1-.75-.75v-5.034a.75.75 0 0 1 1.5 0v4.17a9.004 9.004 0 0 0 13.38-6.223a.75.75 0 0 1 1.494-.156A10.503 10.503 0 0 1 8.25 21.75Z" clip-rule="evenodd"/></svg>
+                <p class="font-semibold text-gray-600 dark:text-gray-400 mt-2">{{ t().vocabularyQuiz }}</p>
+                <span class="text-xs text-gray-400 dark:text-gray-500">{{ t().comingSoon }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Daily Tips -->
           <section>
             <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().dailyTips }}</h2>
-            <div class="flex overflow-x-auto pb-4 snap-x snap-mandatory" [class.space-x-4]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
+            <div class="flex overflow-x-auto pb-4 -mx-6 px-6 snap-x snap-mandatory space-x-4">
               @for(tip of content.tips; track $index) {
-                <div class="snap-start flex-shrink-0 w-64 h-40 rounded-xl overflow-hidden relative text-white p-4 flex flex-col justify-end bg-cover bg-center" [style.background-image]="'url(https://picsum.photos/400/300?random=' + ($index + 1) + ')'">
+                <div class="snap-start flex-shrink-0 w-64 h-40 rounded-xl overflow-hidden relative text-white p-4 flex flex-col justify-end bg-cover bg-center shadow-lg hover:-translate-y-1 transition-transform duration-300" [style.background-image]="'url(https://picsum.photos/400/300?random=' + ($index + 1) + ')'">
                   <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                   <div class="relative z-10">
                     <h3 class="font-bold text-lg">{{ tip.title }}</h3>
@@ -92,23 +140,15 @@
               }
             </div>
           </section>
-  
-          <!-- Daily Challenge -->
-          <section class="mt-8">
-            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().todaysChallenge }}</h2>
-            <div class="p-6 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50">
-              <p class="text-gray-700 dark:text-gray-300">{{ content.challenge }}</p>
-            </div>
-          </section>
         }
-  
+
         @if(homeError()) {
           <div class="text-red-500 dark:text-red-400 text-sm mt-4 text-center p-4 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
             <p><strong>Error:</strong> {{ homeError() }}</p>
           </div>
         }
       </main>
-      
+
       <!-- Bottom Navigation -->
       <footer class="flex-shrink-0 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border-t border-gray-200 dark:border-gray-700/50 sm:rounded-b-2xl">
         <nav class="flex justify-around p-2">

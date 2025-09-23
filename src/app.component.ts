@@ -46,7 +46,12 @@ const translations = {
     dailyTips: "Daily Tips",
     todaysChallenge: "Today's Challenge",
     welcomeBack: "Welcome back",
-    learnSomethingNew: "Let's learn something new today."
+    learnSomethingNew: "Let's learn something new today.",
+    startChallenge: 'Start Challenge',
+    quickActions: 'Quick Actions',
+    practiceConversation: 'Practice Conversation',
+    vocabularyQuiz: 'Vocabulary Quiz',
+    comingSoon: 'Coming Soon',
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -67,7 +72,12 @@ const translations = {
     dailyTips: 'نکات روزانه',
     todaysChallenge: 'چالش امروز',
     welcomeBack: "خوش برگشتی",
-    learnSomethingNew: "بیا امروز یه چیز جدید یاد بگیریم."
+    learnSomethingNew: "بیا امروز یه چیز جدید یاد بگیریم.",
+    startChallenge: 'شروع چالش',
+    quickActions: 'دسترسی سریع',
+    practiceConversation: 'تمرین مکالمه',
+    vocabularyQuiz: 'آزمون واژگان',
+    comingSoon: 'به زودی',
   },
 };
 
@@ -234,6 +244,12 @@ export class AppComponent {
         if (!this.ai) {
              this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
         }
+        
+        const languageMap = {
+          en: 'English',
+          fa: 'Persian (Farsi)',
+        };
+        const requestedLang = languageMap[this.uiLanguage()];
 
         const schema = {
           type: Type.OBJECT,
@@ -254,7 +270,12 @@ export class AppComponent {
           required: ['tips', 'challenge']
         };
 
-        const prompt = `You are an AI assistant for an English learning app. Generate content for the home screen for a user named ${this.userName()}. Provide 3 'Daily Tips' which are short, inspiring English learning tips. Each tip must have a 'title' and a 'description'. Also provide one "Today's Challenge", which is a short paragraph with a simple, actionable task for the user to practice their English today. Respond ONLY with a valid JSON object that adheres to the provided schema. Do not include any other text or markdown formatting in your response.`;
+        const prompt = `You are an AI assistant for an English learning app. The user's name is ${this.userName()} and their selected language is ${requestedLang}. Your task is to generate motivational and engaging content for the app's home screen, IN ${requestedLang}.
+Provide the following in a JSON object:
+1. 'tips': An array of 3 'Daily Tips' for learning English. Each tip should have a 'title' and a 'description'. These tips should be concise and encouraging.
+2. 'challenge': A "Today's Challenge", which is a short paragraph presenting a simple, actionable task for the user to practice their English today.
+
+Respond ONLY with a valid JSON object that adheres to the provided schema. Your entire response, including all text in the tips and challenge, MUST be in ${requestedLang}. Do not include any other text or markdown formatting.`;
 
         const response = await this.ai.models.generateContent({
             model: 'gemini-2.5-flash',
