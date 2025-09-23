@@ -47,7 +47,7 @@ const translations = {
     letsStart: "Let's Start",
     aiAssistant: 'AI Assistant',
     online: 'Online',
-    typeYourMessage: 'Type your message...',
+    typeYourMessage: 'Type or say something...',
     clearChat: 'Clear Chat',
     confirmClearChat: 'Are you sure you want to clear the entire conversation?',
     connecting: 'Connecting to AI...',
@@ -75,6 +75,9 @@ const translations = {
     generatingTest: 'Generating Your Test...',
     evaluatingTest: 'Evaluating Your Answers...',
     pleaseWait: 'This will just take a moment.',
+    startRecording: 'Start Recording',
+    stopRecording: 'Stop Recording',
+    speakText: 'Read message aloud',
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -83,7 +86,7 @@ const translations = {
     letsStart: 'شروع کنیم',
     aiAssistant: 'دستیار هوش مصنوعی',
     online: 'آنلاین',
-    typeYourMessage: 'پیام خود را تایپ کنید...',
+    typeYourMessage: 'پیام خود را تایپ یا بیان کنید...',
     clearChat: 'پاک کردن گفتگو',
     confirmClearChat: 'آیا از پاک کردن کل گفتگو مطمئن هستید؟',
     connecting: 'در حال آماده سازی هوش مصنوعی',
@@ -111,12 +114,17 @@ const translations = {
     generatingTest: 'در حال ساخت آزمون شما...',
     evaluatingTest: 'در حال تحلیل پاسخ‌های شما...',
     pleaseWait: 'این کار فقط یک لحظه طول می‌کشد.',
+    startRecording: 'شروع ضبط',
+    stopRecording: 'توقف ضبط',
+    speakText: 'خواندن پیام',
   },
 };
 
 type Theme = 'light' | 'dark';
 type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'placementTest' | 'home' | 'chatting';
 type PlacementTestState = 'generating' | 'taking' | 'evaluating' | 'results';
+// This is a browser-specific API.
+const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
 @Component({
   selector: 'app-root',
@@ -153,6 +161,12 @@ export class AppComponent {
   selectedAnswer = signal<string | null>(null);
   testResult = signal<TestResult | null>(null);
 
+  // Speech Recognition and Synthesis
+  isRecording = signal<boolean>(false);
+  currentlySpeakingText = signal<string | null>(null);
+  speechSupported = signal<boolean>(!!SpeechRecognition);
+  private recognition: any | null = null;
+
   t = computed(() => translations[this.uiLanguage()]);
   currentQuestion = computed(() => this.testQuestions()[this.currentQuestionIndex()]);
   testProgress = computed(() => this.testQuestions().length > 0 ? ((this.currentQuestionIndex()) / this.testQuestions().length) * 100 : 0);
@@ -163,6 +177,7 @@ export class AppComponent {
 
   constructor() {
     this.initializeTheme();
+    this.initializeSpeechRecognition();
 
     setTimeout(() => {
       const storedName = localStorage.getItem('userName');
@@ -553,5 +568,91 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
     } catch (err) {
       console.error('Could not scroll to bottom:', err);
     }
+  }
+
+  // --- Speech Recognition and Synthesis Methods ---
+
+  private initializeSpeechRecognition(): void {
+    if (!this.speechSupported()) {
+      console.warn('Speech Recognition is not supported in this browser.');
+      return;
+    }
+    this.recognition = new SpeechRecognition();
+    this.recognition.continuous = true;
+    this.recognition.interimResults = true;
+    this.recognition.lang = 'en-US';
+
+    this.recognition.onstart = () => {
+      this.isRecording.set(true);
+    };
+
+    this.recognition.onend = () => {
+      this.isRecording.set(false);
+    };
+
+    this.recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      this.error.set(`Speech recognition error: ${event.error}`);
+    };
+
+    this.recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      this.userInput.set(this.userInput() + finalTranscript);
+    };
+  }
+
+  toggleRecording(): void {
+    if (!this.recognition) return;
+
+    if (this.isRecording()) {
+      this.recognition.stop();
+    } else {
+      // Clear previous input when starting a new recording for better UX
+      this.userInput.set('');
+      this.recognition.start();
+    }
+  }
+
+  speak(textToSpeak: string): void {
+    // If the same message is clicked again, stop speaking
+    if (this.currentlySpeakingText() === textToSpeak) {
+      window.speechSynthesis.cancel();
+      this.currentlySpeakingText.set(null);
+      return;
+    }
+
+    // Clean up markdown for better speech synthesis
+    const cleanedText = textToSpeak
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/[*_`#]/g, ''); // Remove markdown characters
+
+    const utterance = new SpeechSynthesisUtterance(cleanedText);
+    utterance.lang = 'en-US';
+
+    utterance.onstart = () => {
+      this.currentlySpeakingText.set(textToSpeak);
+    };
+
+    utterance.onend = () => {
+      this.currentlySpeakingText.set(null);
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event.error);
+      this.error.set('Sorry, text-to-speech is not available right now.');
+      this.currentlySpeakingText.set(null);
+    };
+
+    window.speechSynthesis.cancel(); // Stop any previous speech
+    window.speechSynthesis.speak(utterance);
   }
 }
