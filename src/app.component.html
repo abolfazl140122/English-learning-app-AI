@@ -1,18 +1,18 @@
 @switch (appState()) {
   @case ('loading') {
-    <div class="flex flex-col items-center justify-center h-full w-full bg-gray-900 text-indigo-300 transition-opacity duration-500">
+    <div class="flex flex-col items-center justify-center h-full w-full bg-gray-100 transition-opacity duration-500">
       <svg viewBox="0 0 100 100" class="w-32 h-32">
         <!-- Static outer circle -->
-        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="1"></circle>
+        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(99, 102, 241, 0.2)" stroke-width="1"></circle>
         
         <!-- Pulsating glow effect -->
-        <circle cx="50" cy="50" r="40" fill="none" stroke="#C7D2FE" stroke-width="2">
+        <circle cx="50" cy="50" r="40" fill="none" stroke="#A5B4FC" stroke-width="2">
           <animate attributeName="r" from="40" to="45" dur="2s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" values="40; 45; 40"/>
-          <animate attributeName="stroke-opacity" from="0.5" to="0" dur="2s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.3, 0.61, 0.355, 1" keyTimes="0; 1" values="0.5; 0; 0.5"/>
+          <animate attributeName="stroke-opacity" from="0.7" to="0" dur="2s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.3, 0.61, 0.355, 1" keyTimes="0; 1" values="0.7; 0; 0.7"/>
         </circle>
   
         <!-- Rotating dashed circle -->
-        <circle cx="50" cy="50" r="35" fill="none" stroke="#818CF8" stroke-width="1.5" stroke-dasharray="10 5" stroke-linecap="round">
+        <circle cx="50" cy="50" r="35" fill="none" stroke="#6366F1" stroke-width="1.5" stroke-dasharray="10 5" stroke-linecap="round">
           <animateTransform
             attributeName="transform"
             type="rotate"
@@ -24,7 +24,7 @@
         </circle>
         
          <!-- Rotating inner dashed circle (opposite direction) -->
-        <circle cx="50" cy="50" r="25" fill="none" stroke="#A5B4FC" stroke-width="1" stroke-dasharray="2 4" stroke-linecap="round">
+        <circle cx="50" cy="50" r="25" fill="none" stroke="#818CF8" stroke-width="1" stroke-dasharray="2 4" stroke-linecap="round">
            <animateTransform
             attributeName="transform"
             type="rotate"
@@ -36,11 +36,11 @@
         </circle>
   
         <!-- Central pulsating core -->
-        <circle cx="50" cy="50" r="10" fill="#6366F1">
+        <circle cx="50" cy="50" r="10" fill="#4F46E5">
            <animate attributeName="r" from="8" to="10" dur="1.5s" begin="0s" repeatCount="indefinite" calcMode="spline" keySplines="0.165, 0.84, 0.44, 1" keyTimes="0; 1" values="8; 10; 8"/>
         </circle>
       </svg>
-      <p class="mt-6 text-lg font-light text-gray-300 tracking-widest animate-pulse">... در حال برقراری ارتباط</p>
+      <p class="mt-6 text-lg font-light text-gray-700 tracking-widest animate-pulse">... در حال برقراری ارتباط</p>
     </div>
   }
   @case ('languageSelection') {
