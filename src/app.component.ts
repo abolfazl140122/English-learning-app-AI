@@ -32,6 +32,22 @@ interface QuizQuestion {
   correct_answer: string;
 }
 
+interface VocabularyQuizQuestion extends QuizQuestion {
+  definition: string;
+}
+
+interface QuizResultSummary {
+  score: number;
+  total: number;
+  feedback: string;
+  wordsToReview: {
+    question: string;
+    yourAnswer: string | null;
+    correctAnswer: string;
+    definition: string;
+  }[];
+}
+
 type EnglishLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 
 interface TestResult {
@@ -56,9 +72,9 @@ const translations = {
     home: 'Home',
     chat: 'Chat',
     backToHome: 'Back to Home',
-    dailyTips: "Daily Tips",
+    dailyTips: 'Daily Tips',
     todaysChallenge: "Today's Challenge",
-    welcomeBack: "Welcome back",
+    welcomeBack: 'Welcome back',
     learnSomethingNew: "Let's learn something new today.",
     startChallenge: 'Start Challenge',
     quickActions: 'Quick Actions',
@@ -78,6 +94,15 @@ const translations = {
     startRecording: 'Start Recording',
     stopRecording: 'Stop Recording',
     speakText: 'Read message aloud',
+    generatingQuiz: 'Crafting Your Quiz...',
+    quizProgress: 'Question {number} of {total}',
+    correct: 'Correct!',
+    incorrect: 'Not quite.',
+    correctAnswerIs: 'The correct answer is:',
+    quizComplete: 'Quiz Complete!',
+    yourScore: 'Your Score',
+    wordsToReview: 'Words to Review',
+    tryAgain: 'Try Again',
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -97,8 +122,8 @@ const translations = {
     backToHome: 'بازگشت به خانه',
     dailyTips: 'نکات روزانه',
     todaysChallenge: 'چالش امروز',
-    welcomeBack: "خوش برگشتی",
-    learnSomethingNew: "بیا امروز یه چیز جدید یاد بگیریم.",
+    welcomeBack: 'خوش برگشتی',
+    learnSomethingNew: 'بیا امروز یه چیز جدید یاد بگیریم.',
     startChallenge: 'شروع چالش',
     quickActions: 'دسترسی سریع',
     practiceConversation: 'تمرین مکالمه',
@@ -117,12 +142,22 @@ const translations = {
     startRecording: 'شروع ضبط',
     stopRecording: 'توقف ضبط',
     speakText: 'خواندن پیام',
+    generatingQuiz: 'در حال آماده‌سازی آزمون...',
+    quizProgress: 'سوال {number} از {total}',
+    correct: 'درست!',
+    incorrect: 'دقیق نبود.',
+    correctAnswerIs: 'پاسخ صحیح:',
+    quizComplete: 'آزمون تمام شد!',
+    yourScore: 'امتیاز شما',
+    wordsToReview: 'واژه‌هایی برای مرور',
+    tryAgain: 'تلاش مجدد',
   },
 };
 
 type Theme = 'light' | 'dark';
-type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'placementTest' | 'home' | 'chatting';
+type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'placementTest' | 'home' | 'chatting' | 'vocabularyQuiz';
 type PlacementTestState = 'generating' | 'taking' | 'evaluating' | 'results';
+type VocabularyQuizState = 'generating' | 'taking' | 'results';
 // This is a browser-specific API.
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -161,6 +196,15 @@ export class AppComponent {
   selectedAnswer = signal<string | null>(null);
   testResult = signal<TestResult | null>(null);
 
+  // Vocabulary Quiz State
+  vocabularyQuizState = signal<VocabularyQuizState>('generating');
+  vocabularyQuestions = signal<VocabularyQuizQuestion[]>([]);
+  currentVocabularyQuestionIndex = signal<number>(0);
+  selectedVocabularyAnswer = signal<string | null>(null);
+  userVocabularyAnswers = signal<(string | null)[]>([]);
+  vocabularyQuizResult = signal<QuizResultSummary | null>(null);
+  isAnswerChecked = signal<boolean>(false);
+
   // Speech Recognition and Synthesis
   isRecording = signal<boolean>(false);
   currentlySpeakingText = signal<string | null>(null);
@@ -170,6 +214,9 @@ export class AppComponent {
   t = computed(() => translations[this.uiLanguage()]);
   currentQuestion = computed(() => this.testQuestions()[this.currentQuestionIndex()]);
   testProgress = computed(() => this.testQuestions().length > 0 ? ((this.currentQuestionIndex()) / this.testQuestions().length) * 100 : 0);
+  
+  currentVocabularyQuestion = computed(() => this.vocabularyQuestions()[this.currentVocabularyQuestionIndex()]);
+  vocabularyQuizProgress = computed(() => this.vocabularyQuestions().length > 0 ? ((this.currentVocabularyQuestionIndex() + 1) / this.vocabularyQuestions().length) * 100 : 0);
 
   private chat!: Chat;
   private ai!: GoogleGenAI;
@@ -251,6 +298,10 @@ export class AppComponent {
   }
   
   navigateTo(view: 'home' | 'chatting'): void {
+    if (view === 'home') {
+        // Reset quiz state when navigating home
+        this.vocabularyQuestions.set([]);
+    }
     this.appState.set(view);
   }
 
@@ -529,6 +580,139 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
       this.isLoading.set(false);
     }
   }
+  
+  // --- Vocabulary Quiz Methods ---
+
+  startVocabularyQuiz(): void {
+    // Reset state
+    this.vocabularyQuizState.set('generating');
+    this.vocabularyQuestions.set([]);
+    this.currentVocabularyQuestionIndex.set(0);
+    this.selectedVocabularyAnswer.set(null);
+    this.userVocabularyAnswers.set([]);
+    this.vocabularyQuizResult.set(null);
+    this.isAnswerChecked.set(false);
+    this.homeError.set(null);
+
+    this.appState.set('vocabularyQuiz');
+    this.generateVocabularyQuiz();
+  }
+
+  async generateVocabularyQuiz(): Promise<void> {
+    try {
+      if (!this.ai) {
+        this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      }
+
+      const schema = {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correct_answer: { type: Type.STRING },
+            definition: { type: Type.STRING },
+          },
+          required: ['question', 'options', 'correct_answer', 'definition'],
+        },
+      };
+
+      const prompt = `You are an expert English language assessment creator. Generate a 5-question multiple-choice vocabulary quiz for a user with an English proficiency level of '${this.englishLevel()}'.
+      - Each question should test knowledge of a specific word by providing a definition or a sentence with a blank.
+      - Each item must have: a 'question' text, an array of exactly 4 'options' (plausible distractors), the 'correct_answer' string (must be one of the options), and a short 'definition' of the correct answer.
+      - Respond ONLY with a valid JSON array.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { responseMimeType: 'application/json', responseSchema: schema },
+      });
+
+      const questions = JSON.parse(response.text.trim());
+      this.vocabularyQuestions.set(questions);
+      this.vocabularyQuizState.set('taking');
+    } catch (e) {
+      this.handleError(e, 'home');
+      this.appState.set('home'); // Go home on error
+    }
+  }
+
+  selectVocabularyAnswer(answer: string): void {
+    if (this.isAnswerChecked()) return;
+    this.selectedVocabularyAnswer.set(answer);
+    this.isAnswerChecked.set(true);
+  }
+
+  nextVocabularyQuestion(): void {
+    this.userVocabularyAnswers.update(answers => [...answers, this.selectedVocabularyAnswer()]);
+
+    if (this.currentVocabularyQuestionIndex() < this.vocabularyQuestions().length - 1) {
+      this.currentVocabularyQuestionIndex.update(i => i + 1);
+      this.selectedVocabularyAnswer.set(null);
+      this.isAnswerChecked.set(false);
+    } else {
+      this.showVocabularyQuizResults();
+    }
+  }
+
+  async showVocabularyQuizResults(): Promise<void> {
+    const questions = this.vocabularyQuestions();
+    const userAnswers = this.userVocabularyAnswers();
+    let score = 0;
+    const wordsToReview: { question: string; yourAnswer: string | null; correctAnswer: string; definition: string }[] = [];
+
+    questions.forEach((q, i) => {
+      const userAnswer = userAnswers[i] ?? null;
+      if (q.correct_answer === userAnswer) {
+        score++;
+      } else {
+        wordsToReview.push({
+          question: q.question,
+          yourAnswer: userAnswer,
+          correctAnswer: q.correct_answer,
+          definition: q.definition,
+        });
+      }
+    });
+
+    let feedback = `Good job! You got ${score} out of ${questions.length}.`;
+    try {
+      const languageMap = { en: 'English', fa: 'Persian (Farsi)' };
+      const requestedLang = languageMap[this.uiLanguage()];
+      const prompt = `An English learner at a ${this.englishLevel()} level scored ${score} out of ${questions.length} on a vocabulary quiz. Write a short, encouraging feedback message (max 25 words) in ${requestedLang}. Respond ONLY with the feedback text.`;
+      
+      const response = await this.ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+      feedback = response.text.trim();
+    } catch (e) {
+      console.error("Failed to generate quiz feedback:", e);
+    }
+
+    this.vocabularyQuizResult.set({ score, total: questions.length, feedback, wordsToReview });
+    this.vocabularyQuizState.set('results');
+  }
+
+  getOptionClass(option: string, correctAnswer: string): string {
+    const base = 'bg-white/50 dark:bg-slate-700/50 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600';
+    const hover = 'hover:bg-indigo-100 dark:hover:bg-slate-700';
+    const selected = 'bg-indigo-600 text-white border-transparent ring-2 ring-indigo-400';
+    const correct = '!bg-green-500 !text-white !border-transparent';
+    const incorrect = '!bg-red-500 !text-white !border-transparent';
+    const disabled = 'disabled:opacity-70';
+
+    if (this.isAnswerChecked()) {
+      if (option === correctAnswer) return correct;
+      if (option === this.selectedVocabularyAnswer()) return incorrect;
+      return `${base} ${disabled}`;
+    }
+
+    if (option === this.selectedVocabularyAnswer()) {
+      return selected;
+    }
+
+    return `${base} ${hover}`;
+  }
+
 
   onUserInput(event: Event): void {
     const target = event.target as HTMLInputElement;
@@ -539,8 +723,6 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
     if (confirm(this.t().confirmClearChat)) {
       this.messages.set([]);
       localStorage.removeItem('chatHistory');
-      // Re-initializing the chat is the correct way to clear the conversation history
-      // and get a new greeting.
       this.initializeChat();
     }
   }
@@ -616,24 +798,21 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
     if (this.isRecording()) {
       this.recognition.stop();
     } else {
-      // Clear previous input when starting a new recording for better UX
       this.userInput.set('');
       this.recognition.start();
     }
   }
 
   speak(textToSpeak: string): void {
-    // If the same message is clicked again, stop speaking
     if (this.currentlySpeakingText() === textToSpeak) {
       window.speechSynthesis.cancel();
       this.currentlySpeakingText.set(null);
       return;
     }
 
-    // Clean up markdown for better speech synthesis
     const cleanedText = textToSpeak
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/[*_`#]/g, ''); // Remove markdown characters
+      .replace(/<[^>]*>/g, '') 
+      .replace(/[*_`#]/g, ''); 
 
     const utterance = new SpeechSynthesisUtterance(cleanedText);
     utterance.lang = 'en-US';
@@ -652,7 +831,7 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
       this.currentlySpeakingText.set(null);
     };
 
-    window.speechSynthesis.cancel(); // Stop any previous speech
+    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   }
 }
