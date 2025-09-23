@@ -49,23 +49,107 @@
       </div>
     </div>
   }
+  @case('home') {
+    <div class="flex flex-col h-full w-full max-w-2xl mx-auto" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <!-- Main content area -->
+      <main class="flex-grow overflow-y-auto p-6">
+        <!-- Header -->
+        <header class="mb-8">
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t().welcomeBack }}, {{ userName() }}!</h1>
+          <p class="text-gray-500 dark:text-gray-400">{{ t().learnSomethingNew }}</p>
+        </header>
+        
+        <!-- Loading Skeleton -->
+        @if (homeIsLoading()) {
+          <div class="animate-pulse">
+            <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+            <div class="flex overflow-hidden" [class.space-x-4]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
+              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+              <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+            </div>
+          </div>
+          <div class="animate-pulse mt-8">
+              <div class="h-8 w-56 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="h-24 bg-gray-300 dark:bg-slate-700 rounded-lg"></div>
+          </div>
+        }
+  
+        <!-- Home Content -->
+        @if (homeContent(); as content) {
+          <!-- Scrolling Banner -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().dailyTips }}</h2>
+            <div class="flex overflow-x-auto pb-4 snap-x snap-mandatory" [class.space-x-4]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
+              @for(tip of content.tips; track $index) {
+                <div class="snap-start flex-shrink-0 w-64 h-40 rounded-xl overflow-hidden relative text-white p-4 flex flex-col justify-end bg-cover bg-center" [style.background-image]="'url(https://picsum.photos/400/300?random=' + ($index + 1) + ')'">
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                  <div class="relative z-10">
+                    <h3 class="font-bold text-lg">{{ tip.title }}</h3>
+                    <p class="text-sm font-light">{{ tip.description }}</p>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+  
+          <!-- Daily Challenge -->
+          <section class="mt-8">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().todaysChallenge }}</h2>
+            <div class="p-6 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50">
+              <p class="text-gray-700 dark:text-gray-300">{{ content.challenge }}</p>
+            </div>
+          </section>
+        }
+  
+        @if(homeError()) {
+          <div class="text-red-500 dark:text-red-400 text-sm mt-4 text-center p-4 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
+            <p><strong>Error:</strong> {{ homeError() }}</p>
+          </div>
+        }
+      </main>
+      
+      <!-- Bottom Navigation -->
+      <footer class="flex-shrink-0 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border-t border-gray-200 dark:border-gray-700/50 sm:rounded-b-2xl">
+        <nav class="flex justify-around p-2">
+          <button class="flex flex-col items-center p-2 rounded-lg text-indigo-500 dark:text-indigo-400 w-24">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M12.71 2.29a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42A1 1 0 0 0 3 13h1v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7h1a1 1 0 0 0 .71-.29a1 1 0 0 0 0-1.42Z"/></svg>
+            <span class="text-xs font-semibold mt-1">{{ t().home }}</span>
+          </button>
+          <button (click)="navigateTo('chatting')" class="flex flex-col items-center p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors w-24">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M.5 14.5a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1V5.41a2 2 0 0 0-.59-1.41L13.41.59A2 2 0 0 0 12 0H2a2 2 0 0 0-2 2v12.5ZM13 2.5L15.5 5H13ZM21.5 8.5a1 1 0 0 0-1 1V19a1 1 0 0 1-1 1H6a1 1 0 0 0 0 2h13a3 3 0 0 0 3-3V9.5a1 1 0 0 0-1-1Z"/></svg>
+            <span class="text-xs font-semibold mt-1">{{ t().chat }}</span>
+          </button>
+        </nav>
+      </footer>
+    </div>
+  }
   @case ('chatting') {
     <div class="flex flex-col h-full sm:h-auto sm:max-h-[calc(100vh-4rem)] w-full max-w-2xl mx-auto bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl rounded-none sm:rounded-2xl sm:my-8 border border-gray-300 dark:border-gray-700/50 shadow-lg shadow-indigo-500/20 dark:shadow-2xl dark:shadow-indigo-900/50 overflow-hidden" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
       <!-- Header -->
       <header class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700/50 flex-shrink-0 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white" [class.mr-4]="uiLanguage() === 'en'" [class.ml-4]="uiLanguage() === 'fa'">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="12" width="16" height="8" rx="2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M17 12v-2a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v2"/><path d="M7 12v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-            </div>
-            <div>
-              <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ t().aiAssistant }}</h1>
-              <p class="text-sm text-green-500 dark:text-green-400 flex items-center">
-                <span class="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full animate-pulse" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'"></span>
-                {{ t().online }}
-              </p>
-            </div>
+        <div class="flex items-center flex-1">
+          <button (click)="navigateTo('home')" class="text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors p-2 rounded-full" [title]="t().backToHome" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+            @if (uiLanguage() === 'fa') {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+            } @else {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            }
+          </button>
+          <div class="flex items-center">
+              <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white" [class.mr-4]="uiLanguage() === 'en'" [class.ml-4]="uiLanguage() === 'fa'">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="12" width="16" height="8" rx="2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M17 12v-2a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v2"/><path d="M7 12v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+              </div>
+              <div>
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ t().aiAssistant }}</h1>
+                <p class="text-sm text-green-500 dark:text-green-400 flex items-center">
+                  <span class="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full animate-pulse" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'"></span>
+                  {{ t().online }}
+                </p>
+              </div>
+          </div>
         </div>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center" [class.space-x-2]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
           <button (click)="toggleTheme()" class="text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-yellow-300 transition-colors p-2 rounded-full" [title]="theme() === 'dark' ? t().toggleThemeLight : t().toggleThemeDark">
             @if (theme() === 'dark') {
               <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>

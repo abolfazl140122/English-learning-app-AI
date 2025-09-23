@@ -12,13 +12,18 @@ import {
   inject,
   computed,
 } from '@angular/core';
-import { GoogleGenAI, Chat } from '@google/genai';
+import { GoogleGenAI, Chat, Type } from '@google/genai';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
 
 interface Message {
   role: 'user' | 'model';
   text: string;
+}
+
+interface HomeContent {
+  tips: { title: string; description: string }[];
+  challenge: string;
 }
 
 const translations = {
@@ -35,6 +40,13 @@ const translations = {
     connecting: 'Connecting to AI...',
     toggleThemeLight: 'Switch to Light Theme',
     toggleThemeDark: 'Switch to Dark Theme',
+    home: 'Home',
+    chat: 'Chat',
+    backToHome: 'Back to Home',
+    dailyTips: "Daily Tips",
+    todaysChallenge: "Today's Challenge",
+    welcomeBack: "Welcome back",
+    learnSomethingNew: "Let's learn something new today."
   },
   fa: {
     welcome: 'خوش آمدید!',
@@ -49,23 +61,31 @@ const translations = {
     connecting: 'در حال آماده سازی هوش مصنوعی',
     toggleThemeLight: 'تغییر به تم روشن',
     toggleThemeDark: 'تغییر به تم تاریک',
+    home: 'خانه',
+    chat: 'گفتگو',
+    backToHome: 'بازگشت به خانه',
+    dailyTips: 'نکات روزانه',
+    todaysChallenge: 'چالش امروز',
+    welcomeBack: "خوش برگشتی",
+    learnSomethingNew: "بیا امروز یه چیز جدید یاد بگیریم."
   },
 };
 
 type Theme = 'light' | 'dark';
+type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'home' | 'chatting';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[class]': `appState() === 'chatting'
-      ? 'flex justify-center h-screen w-full'
-      : 'flex items-center justify-center h-screen p-4'`,
+    '[class]': `(appState() === 'chatting' || appState() === 'home')
+      ? 'flex justify-center h-screen w-full bg-gray-100 dark:bg-slate-900'
+      : 'flex items-center justify-center h-screen p-4 bg-gray-100 dark:bg-slate-900'`,
   },
 })
 export class AppComponent {
-  appState = signal<'loading' | 'languageSelection' | 'onboarding' | 'chatting'>('loading');
+  appState = signal<AppState>('loading');
   uiLanguage = signal<'en' | 'fa'>('en');
   theme = signal<Theme>('dark');
   userName = signal<string>('');
@@ -75,6 +95,11 @@ export class AppComponent {
   error = signal<string | null>(null);
   chatContainer = viewChild<ElementRef>('chatContainer');
   
+  // Home screen state
+  homeContent = signal<HomeContent | null>(null);
+  homeIsLoading = signal<boolean>(false);
+  homeError = signal<string | null>(null);
+
   t = computed(() => translations[this.uiLanguage()]);
 
   private chat!: Chat;
@@ -84,7 +109,6 @@ export class AppComponent {
   constructor() {
     this.initializeTheme();
 
-    // Show loading screen for a bit for aesthetic purposes
     setTimeout(() => {
       const storedName = localStorage.getItem('userName');
       const storedLang = localStorage.getItem('uiLanguage');
@@ -92,34 +116,34 @@ export class AppComponent {
       if (storedName && (storedLang === 'en' || storedLang === 'fa')) {
         this.userName.set(storedName);
         this.uiLanguage.set(storedLang);
-        this.appState.set('chatting');
+        this.appState.set('home');
       } else {
         this.appState.set('languageSelection');
       }
     }, 2500);
 
-    // Effect to scroll down chat when new messages are added
     effect(() => {
       if (this.messages().length && this.chatContainer()) {
         this.scrollToBottom();
       }
     });
 
-    // Effect to initialize chat when the state becomes 'chatting'
     effect(() => {
-      if (this.appState() === 'chatting' && !this.chat) {
+      const state = this.appState();
+      if ((state === 'home' || state === 'chatting') && this.userName() && !this.chat) {
         this.initializeChat();
+      }
+      if (state === 'home' && !this.homeContent() && !this.homeIsLoading()) {
+        this.loadHomeContent();
       }
     });
     
-    // Effect to save chat history to localStorage
     effect(() => {
       if (this.messages().length > 0) {
         localStorage.setItem('chatHistory', JSON.stringify(this.messages()));
       }
     });
     
-    // Effect to apply theme class to document
     effect(() => {
       const currentTheme = this.theme();
       if (currentTheme === 'dark') {
@@ -146,25 +170,27 @@ export class AppComponent {
     localStorage.setItem('uiLanguage', lang);
     this.appState.set('onboarding');
   }
+  
+  navigateTo(view: 'home' | 'chatting'): void {
+    this.appState.set(view);
+  }
 
   async initializeChat(): Promise<void> {
-    this.isLoading.set(true);
     if (!process.env.API_KEY) {
       this.error.set('API key not configured. Please set API_KEY.');
-      this.isLoading.set(false);
       return;
     }
 
-    this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    if (!this.ai) {
+        this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    }
 
     const systemInstruction = `You are a highly advanced and eloquent AI companion. The user, named ${this.userName()}, is communicating with you. Your primary directive is to engage in thoughtful and enriching conversations, conducted exclusively in Persian (Farsi).
-
     Core Persona:
     - **Knowledgeable & Eloquent:** Use a rich and diverse vocabulary. Your responses should be well-structured, clear, and demonstrate a deep understanding of the topic.
     - **Supportive & Patient:** Be encouraging and create a positive conversational environment. Never be judgmental.
     - **Naturally Inquisitive:** Ask open-ended, thought-provoking questions to encourage deeper conversation and help the user explore their thoughts.
     - **Emotionally Intelligent:** Use emojis tastefully to convey warmth and personality, making the interaction feel more human and less robotic.
-
     Communication Rules:
     - **Language:** You MUST ALWAYS respond in Persian (Farsi), no matter the input language.
     - **Greeting:** Begin your very first message by warmly greeting the user by their name, ${this.userName()}.
@@ -179,9 +205,8 @@ export class AppComponent {
     const storedHistory = localStorage.getItem('chatHistory');
     if (storedHistory && JSON.parse(storedHistory).length > 0) {
       this.messages.set(JSON.parse(storedHistory));
-      this.isLoading.set(false);
     } else {
-      this.startInitialConversation();
+      // Don't send a message immediately, wait for user interaction in chat.
     }
   }
   
@@ -193,32 +218,61 @@ export class AppComponent {
     if (name) {
       localStorage.setItem('userName', name);
       this.userName.set(name);
-      this.appState.set('chatting');
+      this.appState.set('home');
     }
   }
 
-  async startInitialConversation() {
-    this.isLoading.set(true);
-    try {
-      // The initial message is now simpler; the system prompt handles the introduction.
-      const result = await this.chat.sendMessageStream({
-        message: `Hello! Please introduce yourself.`,
-      });
+  async loadHomeContent(): Promise<void> {
+    if (!this.userName() || !process.env.API_KEY) {
+      this.homeError.set('User name not found or API key not configured.');
+      return;
+    }
+    this.homeIsLoading.set(true);
+    this.homeError.set(null);
 
-      this.messages.update(current => [...current, { role: 'model', text: '' }]);
-      let streamingText = '';
-      for await (const chunk of result) {
-        streamingText += chunk.text;
-        this.messages.update(current => {
-          const lastMessage = current[current.length - 1];
-          lastMessage.text = streamingText;
-          return [...current];
+    try {
+        if (!this.ai) {
+             this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+        }
+
+        const schema = {
+          type: Type.OBJECT,
+          properties: {
+            tips: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING, description: 'A short, catchy title (max 5 words).' },
+                  description: { type: Type.STRING, description: 'A brief description (max 20 words).' }
+                },
+                required: ['title', 'description']
+              }
+            },
+            challenge: { type: Type.STRING, description: 'A short challenge paragraph (max 50 words).' }
+          },
+          required: ['tips', 'challenge']
+        };
+
+        const prompt = `You are an AI assistant for an English learning app. Generate content for the home screen for a user named ${this.userName()}. Provide 3 'Daily Tips' which are short, inspiring English learning tips. Each tip must have a 'title' and a 'description'. Also provide one "Today's Challenge", which is a short paragraph with a simple, actionable task for the user to practice their English today. Respond ONLY with a valid JSON object that adheres to the provided schema. Do not include any other text or markdown formatting in your response.`;
+
+        const response = await this.ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: schema,
+            },
         });
-      }
+
+        const jsonString = response.text.trim();
+        const content = JSON.parse(jsonString);
+        this.homeContent.set(content);
+
     } catch (e) {
-      this.handleError(e);
+        this.handleError(e, 'home');
     } finally {
-      this.isLoading.set(false);
+        this.homeIsLoading.set(false);
     }
   }
 
@@ -226,6 +280,23 @@ export class AppComponent {
     const userMessageText = this.userInput();
     if (!userMessageText.trim() || this.isLoading()) {
       return;
+    }
+    
+    if (this.messages().length === 0) {
+      // This is the first message from the user in a new chat. Let's get the AI's greeting.
+      this.isLoading.set(true);
+      const initialResult = await this.chat.sendMessageStream({ message: `Hello! Please introduce yourself.` });
+      this.messages.update(current => [...current, { role: 'model', text: '' }]);
+      let initialText = '';
+      for await (const chunk of initialResult) {
+        initialText += chunk.text;
+        this.messages.update(current => {
+          const lastMessage = current[current.length - 1];
+          lastMessage.text = initialText;
+          return [...current];
+        });
+      }
+      this.isLoading.set(false);
     }
 
     this.messages.update(current => [
@@ -265,7 +336,8 @@ export class AppComponent {
     if (confirm(this.t().confirmClearChat)) {
       this.messages.set([]);
       localStorage.removeItem('chatHistory');
-      // Re-initialize the chat to get a fresh session.
+      // FIX: The 'config' property of a Chat object is private.
+      // Re-initializing the chat is the correct way to clear the conversation history.
       this.initializeChat();
     }
   }
@@ -274,12 +346,16 @@ export class AppComponent {
     return this.sanitizer.bypassSecurityTrustHtml(marked.parse(text) as string);
   }
 
-  private handleError(e: unknown) {
+  private handleError(e: unknown, context: 'chat' | 'home' = 'chat') {
     console.error(e);
     const message = e instanceof Error ? e.message : 'An unknown error occurred.';
-    this.error.set(`Failed to get response from AI. ${message}`);
-    // remove the empty model message placeholder on error
-    this.messages.update(current => current.filter(m => m.text !== ''));
+    const errorMessage = `Failed to get response from AI. ${message}`;
+    if (context === 'home') {
+        this.homeError.set(errorMessage);
+    } else {
+        this.error.set(errorMessage);
+        this.messages.update(current => current.filter(m => m.text !== ''));
+    }
   }
   
   private scrollToBottom(): void {
