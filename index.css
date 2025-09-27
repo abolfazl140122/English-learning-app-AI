@@ -29,6 +29,23 @@ html:hover {
     scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
 }
 
+/* Page transition animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+
 /* Dark mode specific scrollbar styles */
 .dark ::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.15);

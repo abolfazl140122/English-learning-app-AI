@@ -166,9 +166,7 @@ const SpeechRecognition = (window as any).SpeechRecognition || (window as any).w
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '[class]': `(appState() === 'chatting' || appState() === 'home')
-      ? 'flex justify-center h-screen w-full bg-gray-100 dark:bg-slate-900'
-      : 'flex items-center justify-center h-screen p-4 bg-gray-100 dark:bg-slate-900'`,
+    '[class]': 'hostClasses()',
   },
 })
 export class AppComponent {
@@ -218,6 +216,14 @@ export class AppComponent {
   currentVocabularyQuestion = computed(() => this.vocabularyQuestions()[this.currentVocabularyQuestionIndex()]);
   vocabularyQuizProgress = computed(() => this.vocabularyQuestions().length > 0 ? ((this.currentVocabularyQuestionIndex() + 1) / this.vocabularyQuestions().length) * 100 : 0);
 
+  hostClasses = computed(() => {
+    const state = this.appState();
+    if (state === 'chatting' || state === 'home') {
+      return 'flex justify-center h-screen w-full bg-gray-100 dark:bg-slate-900';
+    }
+    return 'flex items-center justify-center h-screen p-4 bg-gray-100 dark:bg-slate-900';
+  });
+
   private chat!: Chat;
   private ai!: GoogleGenAI;
   private sanitizer = inject(DomSanitizer);
@@ -226,24 +232,22 @@ export class AppComponent {
     this.initializeTheme();
     this.initializeSpeechRecognition();
 
-    setTimeout(() => {
-      const storedName = localStorage.getItem('userName');
-      const storedLang = localStorage.getItem('uiLanguage') as 'en' | 'fa' | null;
-      const storedLevel = localStorage.getItem('englishLevel') as EnglishLevel | null;
+    const storedName = localStorage.getItem('userName');
+    const storedLang = localStorage.getItem('uiLanguage') as 'en' | 'fa' | null;
+    const storedLevel = localStorage.getItem('englishLevel') as EnglishLevel | null;
 
-      if (storedName && storedLang) {
-        this.userName.set(storedName);
-        this.uiLanguage.set(storedLang);
-        if (storedLevel) {
-          this.englishLevel.set(storedLevel);
-          this.appState.set('home');
-        } else {
-          this.appState.set('placementTest');
-        }
+    if (storedName && storedLang) {
+      this.userName.set(storedName);
+      this.uiLanguage.set(storedLang);
+      if (storedLevel) {
+        this.englishLevel.set(storedLevel);
+        this.appState.set('home');
       } else {
-        this.appState.set('languageSelection');
+        this.appState.set('placementTest');
       }
-    }, 2500);
+    } else {
+      this.appState.set('languageSelection');
+    }
 
     effect(() => {
       if (this.messages().length && this.chatContainer()) {
@@ -281,6 +285,20 @@ export class AppComponent {
     });
   }
 
+  private getAiClient(): GoogleGenAI {
+    if (!this.ai) {
+      if (!process.env.API_KEY) {
+        const errorMsg = 'API key not configured. Please set API_KEY.';
+        // Set error state for both chat and home contexts
+        this.error.set(errorMsg);
+        this.homeError.set(errorMsg);
+        throw new Error(errorMsg);
+      }
+      this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    }
+    return this.ai;
+  }
+
   initializeTheme() {
     const storedTheme = localStorage.getItem('theme') as Theme | null;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -306,50 +324,46 @@ export class AppComponent {
   }
 
   async initializeChat(): Promise<void> {
-    if (!process.env.API_KEY) {
-      this.error.set('API key not configured. Please set API_KEY.');
-      return;
-    }
+    try {
+      const ai = this.getAiClient();
+      const systemInstruction = `You are a friendly and supportive AI English tutor. The user you are talking to is named ${this.userName()}, and their estimated English proficiency is ${this.englishLevel()}.
 
-    if (!this.ai) {
-        this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-    }
-
-    const systemInstruction = `You are a friendly and supportive AI English tutor. The user you are talking to is named ${this.userName()}, and their estimated English proficiency is ${this.englishLevel()}.
-
-    Core Directives:
-    - Language: All your responses MUST be in English.
-    - Adaptability: Tailor the complexity of your vocabulary and sentence structures to the user's ${this.englishLevel()} level.
-      - For Beginners: Use simple words, short sentences, and ask clear, direct questions.
-      - For Intermediate: Introduce more nuanced vocabulary and slightly more complex sentences. Encourage them to elaborate.
-      - For Advanced: Engage in deep, complex conversations. Feel free to use idiomatic expressions (and explain them if necessary).
-    - Corrections: Gently correct major grammatical mistakes. Don't interrupt the flow of conversation for minor errors. Phrase corrections positively, for example: "That's a great point! A slightly more natural way to say that would be..."
-    - Encouragement: Be positive and encouraging. Praise their effort.
-    - Formatting: Use Markdown for formatting (like bolding key terms or using lists) to improve readability.
-    - Greeting: Begin your very first message in a new conversation with a friendly greeting, like "Hi ${this.userName()}! Ready to practice some English today?".`;
+      Core Directives:
+      - Language: All your responses MUST be in English.
+      - Adaptability: Tailor the complexity of your vocabulary and sentence structures to the user's ${this.englishLevel()} level.
+        - For Beginners: Use simple words, short sentences, and ask clear, direct questions.
+        - For Intermediate: Introduce more nuanced vocabulary and slightly more complex sentences. Encourage them to elaborate.
+        - For Advanced: Engage in deep, complex conversations. Feel free to use idiomatic expressions (and explain them if necessary).
+      - Corrections: Gently correct major grammatical mistakes. Don't interrupt the flow of conversation for minor errors. Phrase corrections positively, for example: "That's a great point! A slightly more natural way to say that would be..."
+      - Encouragement: Be positive and encouraging. Praise their effort.
+      - Formatting: Use Markdown for formatting (like bolding key terms or using lists) to improve readability.
+      - Greeting: Begin your very first message in a new conversation with a friendly greeting, like "Hi ${this.userName()}! Ready to practice some English today?".`;
+        
+      this.chat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: { systemInstruction },
+      });
       
-    this.chat = this.ai.chats.create({
-      model: 'gemini-2.5-flash',
-      config: { systemInstruction },
-    });
-    
-    const storedHistory = localStorage.getItem('chatHistory');
-    if (storedHistory && JSON.parse(storedHistory).length > 0) {
-      this.messages.set(JSON.parse(storedHistory));
-    } else {
-       // Send initial greeting from AI
-      this.isLoading.set(true);
-      const result = await this.chat.sendMessageStream({ message: `Hi, please greet me.` });
-      this.messages.set([{ role: 'model', text: '' }]);
-      let streamingText = '';
-      for await (const chunk of result) {
-        streamingText += chunk.text;
-        this.messages.update(current => {
-          current[0].text = streamingText;
-          return [...current];
-        });
+      const storedHistory = localStorage.getItem('chatHistory');
+      if (storedHistory && JSON.parse(storedHistory).length > 0) {
+        this.messages.set(JSON.parse(storedHistory));
+      } else {
+         // Send initial greeting from AI
+        this.isLoading.set(true);
+        const result = await this.chat.sendMessageStream({ message: `Hi, please greet me.` });
+        this.messages.set([{ role: 'model', text: '' }]);
+        let streamingText = '';
+        for await (const chunk of result) {
+          streamingText += chunk.text;
+          this.messages.update(current => {
+            current[0].text = streamingText;
+            return [...current];
+          });
+        }
+        this.isLoading.set(false);
       }
-      this.isLoading.set(false);
+    } catch (e) {
+      this.handleError(e);
     }
   }
   
@@ -369,10 +383,7 @@ export class AppComponent {
     this.homeError.set(null);
     this.placementTestState.set('generating');
     try {
-      if (!this.ai) {
-        this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      }
-
+      const ai = this.getAiClient();
       const schema = {
         type: Type.ARRAY,
         items: {
@@ -391,7 +402,7 @@ export class AppComponent {
 - Each question must have a 'question' text, an array of exactly 4 string 'options', and the 'correct_answer' string which must be one of the options.
 - Respond ONLY with a valid JSON array adhering to the provided schema. Do not include any other text or markdown.`;
 
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
@@ -429,7 +440,8 @@ export class AppComponent {
     this.placementTestState.set('evaluating');
     this.homeError.set(null);
     try {
-       const questionsAndAnswers = this.testQuestions().map((q, i) => ({
+      const ai = this.getAiClient();
+      const questionsAndAnswers = this.testQuestions().map((q, i) => ({
         question: q.question,
         correct_answer: q.correct_answer,
         user_answer: this.userAnswers()[i]
@@ -456,7 +468,7 @@ export class AppComponent {
       
       Respond ONLY with a valid JSON object with two keys: 'level' (the determined proficiency level) and 'feedback' (the feedback message). Do not include any other text or markdown.`;
 
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
@@ -483,18 +495,15 @@ export class AppComponent {
 
 
   async loadHomeContent(): Promise<void> {
-    if (!this.userName() || !process.env.API_KEY) {
-      this.homeError.set('User name not found or API key not configured.');
+    if (!this.userName()) {
+      this.homeError.set('User name not found.');
       return;
     }
     this.homeIsLoading.set(true);
     this.homeError.set(null);
 
     try {
-        if (!this.ai) {
-             this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-        }
-        
+        const ai = this.getAiClient();
         const languageMap = {
           en: 'English',
           fa: 'Persian (Farsi)',
@@ -527,7 +536,7 @@ Provide the following in a JSON object:
 
 Respond ONLY with a valid JSON object that adheres to the provided schema. Your entire response, including all text in the tips and challenge, MUST be in ${requestedLang}. Do not include any other text or markdown formatting.`;
 
-        const response = await this.ai.models.generateContent({
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
@@ -600,10 +609,7 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
 
   async generateVocabularyQuiz(): Promise<void> {
     try {
-      if (!this.ai) {
-        this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      }
-
+      const ai = this.getAiClient();
       const schema = {
         type: Type.ARRAY,
         items: {
@@ -623,7 +629,7 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
       - Each item must have: a 'question' text, an array of exactly 4 'options' (plausible distractors), the 'correct_answer' string (must be one of the options), and a short 'definition' of the correct answer.
       - Respond ONLY with a valid JSON array.`;
 
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json', responseSchema: schema },
@@ -678,11 +684,12 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
 
     let feedback = `Good job! You got ${score} out of ${questions.length}.`;
     try {
+      const ai = this.getAiClient();
       const languageMap = { en: 'English', fa: 'Persian (Farsi)' };
       const requestedLang = languageMap[this.uiLanguage()];
       const prompt = `An English learner at a ${this.englishLevel()} level scored ${score} out of ${questions.length} on a vocabulary quiz. Write a short, encouraging feedback message (max 25 words) in ${requestedLang}. Respond ONLY with the feedback text.`;
       
-      const response = await this.ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+      const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
       feedback = response.text.trim();
     } catch (e) {
       console.error("Failed to generate quiz feedback:", e);
@@ -733,6 +740,9 @@ Respond ONLY with a valid JSON object that adheres to the provided schema. Your 
 
   private handleError(e: unknown, context: 'chat' | 'home' = 'chat') {
     console.error(e);
+    // Avoid setting error if it's a known handled error from getAiClient
+    if (e instanceof Error && e.message.startsWith('API key not configured')) return;
+
     const message = e instanceof Error ? e.message : 'An unknown error occurred.';
     const errorMessage = `Failed to get response from AI. ${message}`;
     if (context === 'home') {
