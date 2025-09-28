@@ -4,7 +4,72 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Angular Example</title>
-  <link rel="stylesheet" href="index.css">
+  <style>
+    /* For Webkit-based browsers (Chrome, Safari, Edge) */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(128, 128, 128, 0.2);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(128, 128, 128, 0.4);
+    }
+
+    /* For Firefox */
+    html {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(128, 128, 128, 0.2) transparent;
+    }
+
+    html:hover {
+        scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+    }
+
+    /* Page transition animation */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+
+
+    /* Dark mode specific scrollbar styles */
+    .dark ::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .dark html {
+      scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .dark html:hover {
+      scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+  </style>
   <script src="https://cdn.tailwindcss.com"></script>
 <script type="importmap">
 {
@@ -22,6 +87,1333 @@
 </head>
 <body class="bg-gray-100 dark:bg-slate-900 antialiased">
   <app-root></app-root>
-  <script type="module" src="index.tsx"></script>
+  <script type="module">
+    import '@angular/compiler';
+    import {
+      ChangeDetectionStrategy,
+      Component,
+      signal,
+      effect,
+      viewChild,
+      ElementRef,
+      inject,
+      computed,
+    } from '@angular/core';
+    import { provideZonelessChangeDetection } from '@angular/core';
+    import { bootstrapApplication, DomSanitizer, SafeHtml } from '@angular/platform-browser';
+    import { GoogleGenAI, Chat, Type } from '@google/genai';
+    import { marked } from 'marked';
+    
+    interface Message {
+      role: 'user' | 'model';
+      text: string;
+    }
+
+    interface HomeContent {
+      tips: { title: string; description: string }[];
+      challenge: string;
+    }
+
+    interface QuizQuestion {
+      question: string;
+      options: string[];
+      correct_answer: string;
+    }
+
+    interface VocabularyQuizQuestion extends QuizQuestion {
+      definition: string;
+    }
+
+    interface QuizResultSummary {
+      score: number;
+      total: number;
+      feedback: string;
+      wordsToReview: {
+        question: string;
+        yourAnswer: string | null;
+        correctAnswer: string;
+        definition: string;
+      }[];
+    }
+
+    type EnglishLevel = 'Beginner' | 'Intermediate' | 'Advanced';
+
+    interface TestResult {
+      level: EnglishLevel;
+      feedback: string;
+    }
+
+    const translations = {
+      en: {
+        welcome: 'Welcome!',
+        whatToCallYou: 'What should we call you?',
+        enterYourName: 'Enter your name',
+        letsStart: "Let's Start",
+        aiAssistant: 'AI Assistant',
+        online: 'Online',
+        typeYourMessage: 'Type or say something...',
+        clearChat: 'Clear Chat',
+        confirmClearChat: 'Are you sure you want to clear the entire conversation?',
+        connecting: 'Connecting to AI...',
+        toggleThemeLight: 'Switch to Light Theme',
+        toggleThemeDark: 'Switch to Dark Theme',
+        home: 'Home',
+        chat: 'Chat',
+        backToHome: 'Back to Home',
+        dailyTips: 'Daily Tips',
+        todaysChallenge: "Today's Challenge",
+        welcomeBack: 'Welcome back',
+        learnSomethingNew: "Let's learn something new today.",
+        startChallenge: 'Start Challenge',
+        quickActions: 'Quick Actions',
+        practiceConversation: 'Practice Conversation',
+        vocabularyQuiz: 'Vocabulary Quiz',
+        comingSoon: 'Coming Soon',
+        placementTest: 'Placement Test',
+        selectCorrectAnswer: 'Choose the best option to complete the sentence.',
+        nextQuestion: 'Next Question',
+        finishTest: 'Finish Test',
+        testComplete: 'Test Complete!',
+        yourLevelIs: "We've determined your level is:",
+        startLearning: "Let's Start Learning!",
+        generatingTest: 'Generating Your Test...',
+        evaluatingTest: 'Evaluating Your Answers...',
+        pleaseWait: 'This will just take a moment.',
+        startRecording: 'Start Recording',
+        stopRecording: 'Stop Recording',
+        speakText: 'Read message aloud',
+        generatingQuiz: 'Crafting Your Quiz...',
+        quizProgress: 'Question {number} of {total}',
+        correct: 'Correct!',
+        incorrect: 'Not quite.',
+        correctAnswerIs: 'The correct answer is:',
+        quizComplete: 'Quiz Complete!',
+        yourScore: 'Your Score',
+        wordsToReview: 'Words to Review',
+        tryAgain: 'Try Again',
+      },
+      fa: {
+        welcome: 'خوش آمدید!',
+        whatToCallYou: 'شما را چه بنامیم؟',
+        enterYourName: 'نام خود را وارد کنید',
+        letsStart: 'شروع کنیم',
+        aiAssistant: 'دستیار هوش مصنوعی',
+        online: 'آنلاین',
+        typeYourMessage: 'پیام خود را تایپ یا بیان کنید...',
+        clearChat: 'پاک کردن گفتگو',
+        confirmClearChat: 'آیا از پاک کردن کل گفتگو مطمئن هستید؟',
+        connecting: 'در حال آماده سازی هوش مصنوعی',
+        toggleThemeLight: 'تغییر به تم روشن',
+        toggleThemeDark: 'تغییر به تم تاریک',
+        home: 'خانه',
+        chat: 'گفتگو',
+        backToHome: 'بازگشت به خانه',
+        dailyTips: 'نکات روزانه',
+        todaysChallenge: 'چالش امروز',
+        welcomeBack: 'خوش برگشتی',
+        learnSomethingNew: 'بیا امروز یه چیز جدید یاد بگیریم.',
+        startChallenge: 'شروع چالش',
+        quickActions: 'دسترسی سریع',
+        practiceConversation: 'تمرین مکالمه',
+        vocabularyQuiz: 'آزمون واژگان',
+        comingSoon: 'به زودی',
+        placementTest: 'آزمون تعیین سطح',
+        selectCorrectAnswer: 'بهترین گزینه را برای تکمیل جمله انتخاب کنید.',
+        nextQuestion: 'سوال بعدی',
+        finishTest: 'پایان آزمون',
+        testComplete: 'آزمون تمام شد!',
+        yourLevelIs: 'سطح شما مشخص شد:',
+        startLearning: 'بزن بریم یاد بگیریم!',
+        generatingTest: 'در حال ساخت آزمون شما...',
+        evaluatingTest: 'در حال تحلیل پاسخ‌های شما...',
+        pleaseWait: 'این کار فقط یک لحظه طول می‌کشد.',
+        startRecording: 'شروع ضبط',
+        stopRecording: 'توقف ضبط',
+        speakText: 'خواندن پیام',
+        generatingQuiz: 'در حال آماده‌سازی آزمون...',
+        quizProgress: 'سوال {number} از {total}',
+        correct: 'درست!',
+        incorrect: 'دقیق نبود.',
+        correctAnswerIs: 'پاسخ صحیح:',
+        quizComplete: 'آزمون تمام شد!',
+        yourScore: 'امتیاز شما',
+        wordsToReview: 'واژه‌هایی برای مرور',
+        tryAgain: 'تلاش مجدد',
+      },
+    };
+
+    type Theme = 'light' | 'dark';
+    type AppState = 'loading' | 'languageSelection' | 'onboarding' | 'placementTest' | 'home' | 'chatting' | 'vocabularyQuiz';
+    type PlacementTestState = 'generating' | 'taking' | 'evaluating' | 'results';
+    type VocabularyQuizState = 'generating' | 'taking' | 'results';
+    // This is a browser-specific API.
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    @Component({
+      selector: 'app-root',
+      template: `@switch (appState()) {
+  @case ('loading') {
+    <div class="flex flex-col items-center justify-center h-full w-full text-center">
+      <div class="relative w-32 h-32">
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full animate-pulse"></div>
+        <div class="absolute inset-2 bg-gray-100 dark:bg-slate-900 rounded-full"></div>
+        <div class="absolute inset-4 bg-gradient-to-br from-purple-600 to-indigo-500 rounded-full animate-pulse [animation-delay:-1s]"></div>
+        <div class="absolute inset-6 bg-gray-100 dark:bg-slate-900 rounded-full"></div>
+        <div class="absolute inset-8 flex items-center justify-center text-indigo-400 dark:text-indigo-300 font-bold text-3xl">AI</div>
+      </div>
+      <p class="mt-8 text-lg font-light text-gray-600 dark:text-gray-400 tracking-widest animate-pulse">
+        {{ t().connecting }}
+      </p>
+    </div>
+  }
+  @case ('languageSelection') {
+    <div class="w-full max-w-md mx-auto p-8 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-lg shadow-indigo-500/10 dark:shadow-2xl dark:shadow-indigo-900/20 animate-fade-in">
+      <div class="text-center">
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-2">Choose Language</h1>
+        <p class="text-gray-500 dark:text-gray-400 mb-8">زبان خود را انتخاب کنید</p>
+        <div class="flex flex-col space-y-4">
+          <button (click)="selectLanguage('en')" class="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full py-3 font-semibold hover:from-blue-600 hover:to-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+            English
+          </button>
+          <button (click)="selectLanguage('fa')" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full py-3 font-semibold hover:from-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+            فارسی
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+  @case ('onboarding') {
+    <div class="w-full max-w-md mx-auto p-8 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-lg shadow-purple-500/10 dark:shadow-2xl dark:shadow-purple-900/20 animate-fade-in" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <div class="text-center">
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-2">{{ t().welcome }}</h1>
+        <p class="text-gray-500 dark:text-gray-400 mb-8">{{ t().whatToCallYou }}</p>
+        <form (submit)="handleNameSubmit($event)" class="w-full">
+          <input
+            #nameInput
+            type="text"
+            [placeholder]="t().enterYourName"
+            class="w-full px-4 py-3 bg-white/50 dark:bg-slate-800/50 border border-gray-300 dark:border-gray-700 rounded-full text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow duration-200"
+            required
+          >
+          <button type="submit" class="w-full mt-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full py-3 font-semibold hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+            {{ t().letsStart }}
+          </button>
+        </form>
+      </div>
+    </div>
+  }
+  @case ('placementTest') {
+    <div class="w-full max-w-xl mx-auto p-8 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-lg shadow-indigo-500/10 dark:shadow-2xl dark:shadow-indigo-900/20 animate-fade-in">
+      @switch (placementTestState()) {
+        @case ('generating' || 'evaluating') {
+          <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              {{ placementTestState() === 'generating' ? t().generatingTest : t().evaluatingTest }}
+            </h1>
+            <div class="flex justify-center items-center space-x-2">
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce"></div>
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mt-4">{{ t().pleaseWait }}</p>
+          </div>
+        }
+        @case ('taking') {
+          @if (currentQuestion(); as question) {
+            <div class="text-center">
+               <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">{{ t().placementTest }}</h1>
+               <p class="text-gray-500 dark:text-gray-400 mb-6">{{ t().selectCorrectAnswer }}</p>
+
+              <!-- Progress Bar -->
+              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
+                <div class="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full" [style.width]="testProgress() + '%'"></div>
+              </div>
+
+              <!-- Question -->
+              <div class="p-6 bg-gray-100 dark:bg-gray-900/50 rounded-lg mb-6">
+                <p class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ currentQuestionIndex() + 1 }}. {{ question.question }}</p>
+              </div>
+
+              <!-- Options -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @for (option of question.options; track option) {
+                  <button
+                    (click)="selectAnswer(option)"
+                    [class]="selectedAnswer() === option
+                      ? 'bg-indigo-600 text-white border-transparent ring-2 ring-indigo-400'
+                      : 'bg-white/50 dark:bg-slate-700/50 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-indigo-100 dark:hover:bg-slate-700'"
+                    class="w-full text-left p-4 rounded-lg border transition-all duration-200 font-medium">
+                    {{ option }}
+                  </button>
+                }
+              </div>
+
+              <button
+                (click)="submitAnswer()"
+                [disabled]="!selectedAnswer()"
+                class="w-full mt-8 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full py-3 font-semibold hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed">
+                {{ currentQuestionIndex() === testQuestions().length - 1 ? t().finishTest : t().nextQuestion }}
+              </button>
+            </div>
+          }
+        }
+        @case ('results') {
+          @if (testResult(); as result) {
+            <div class="text-center">
+              <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ t().testComplete }}</h1>
+              <p class="text-lg text-gray-600 dark:text-gray-300 mb-4">{{ t().yourLevelIs }}</p>
+              <div class="inline-block bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-2xl font-bold px-8 py-3 rounded-full mb-6 shadow-lg">
+                {{ result.level }}
+              </div>
+              <p class="text-gray-500 dark:text-gray-400 italic mb-8">"{{ result.feedback }}"</p>
+              <button (click)="finishTestAndGoHome()" class="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-full py-3 font-semibold hover:from-green-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+                {{ t().startLearning }}
+              </button>
+            </div>
+          }
+        }
+      }
+       @if(homeError()) {
+        <div class="text-red-500 dark:text-red-400 text-sm mt-4 text-center p-4 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
+          <p><strong>Error:</strong> {{ homeError() }}</p>
+        </div>
+      }
+    </div>
+  }
+  @case('home') {
+    <div class="flex flex-col h-full w-full max-w-2xl mx-auto animate-fade-in" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <!-- Main content area -->
+      <main class="flex-grow overflow-y-auto p-6 space-y-8">
+        <!-- Header -->
+        <header class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t().welcomeBack }}, {{ userName() }}!</h1>
+            <p class="text-gray-500 dark:text-gray-400">{{ t().learnSomethingNew }}</p>
+          </div>
+          @if(userName()) {
+            <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl ring-2 ring-white/20">
+              {{ userName().charAt(0).toUpperCase() }}
+            </div>
+          }
+        </header>
+
+        <!-- Loading Skeleton -->
+        @if (homeIsLoading()) {
+          <div class="animate-pulse space-y-8">
+            <!-- Challenge Skeleton -->
+            <div>
+              <div class="h-8 w-56 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="h-32 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+            </div>
+            <!-- Quick Actions Skeleton -->
+            <div>
+              <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="grid grid-cols-2 gap-4">
+                <div class="h-28 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+                <div class="h-28 bg-gray-300 dark:bg-slate-700 rounded-2xl"></div>
+              </div>
+            </div>
+            <!-- Tips Skeleton -->
+            <div>
+              <div class="h-8 w-48 bg-gray-300 dark:bg-slate-700 rounded-md mb-4"></div>
+              <div class="flex space-x-4 -mx-6 px-6">
+                <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+                <div class="w-64 h-40 bg-gray-300 dark:bg-slate-700 rounded-lg flex-shrink-0"></div>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Home Content -->
+        @if (homeContent(); as content) {
+          <!-- Daily Challenge -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+               <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-indigo-500" [class.mr-3]="uiLanguage() === 'en'" [class.ml-3]="uiLanguage() === 'fa'" viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 2h-13A2.5 2.5 0 0 0 3 4.5v13.08a2.5 2.5 0 0 0 3.75 2.17L12 16.5l5.25 3.25a2.5 2.5 0 0 0 3.75-2.17V4.5A2.5 2.5 0 0 0 18.5 2ZM12 14.5l-4 2.5V5h8v12Z"/></svg>
+              <span>{{ t().todaysChallenge }}</span>
+            </h2>
+            <div class="p-6 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg shadow-indigo-500/30 dark:shadow-indigo-900/50 flex flex-col items-start">
+              <p class="text-lg font-medium mb-6">{{ content.challenge }}</p>
+              <button (click)="navigateTo('chatting')" class="mt-auto w-full bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full py-3 font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-white/50">
+                {{ t().startChallenge }}
+              </button>
+            </div>
+          </section>
+
+          <!-- Quick Actions -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().quickActions }}</h2>
+            <div class="grid grid-cols-2 gap-4">
+              <button (click)="navigateTo('chatting')" class="group p-4 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 text-center hover:border-indigo-300 dark:hover:border-indigo-600 hover:-translate-y-1 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mx-auto text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M21.75 12.003a9.75 9.75 0 0 1-9.75 9.75c-4.327 0-8.02-2.834-9.23-6.756a.75.75 0 0 1 1.458-.495A8.25 8.25 0 0 0 12 20.253a8.25 8.25 0 0 0 8.25-8.25c0-4.05-2.92-7.412-6.755-8.156a.75.75 0 0 1 .41-1.46A9.75 9.75 0 0 1 21.75 12.003Z"/><path d="M12.75 4.5a.75.75 0 0 0-1.5 0v3.75a.75.75 0 0 0 1.5 0V4.5Z"/><path d="M9.879 6.879a.75.75 0 1 0-1.06 1.06l2.121 2.121a.75.75 0 1 0 1.06-1.06L9.879 6.879Z"/><path d="M15.182 11.026a.75.75 0 0 0-1.06-1.06l-2.121 2.121a.75.75 0 0 0 1.06 1.06l2.121-2.121Z"/></svg>
+                <p class="font-semibold text-gray-800 dark:text-gray-200 mt-2">{{ t().practiceConversation }}</p>
+              </button>
+               <button (click)="startVocabularyQuiz()" class="group p-4 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 text-center hover:border-indigo-300 dark:hover:border-indigo-600 hover:-translate-y-1 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 mx-auto text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M11.25 3a.75.75 0 1 0-1.5 0v1.5h-1.5a.75.75 0 0 0 0 1.5h1.5v1.5a.75.75 0 1 0 1.5 0v-1.5h1.5a.75.75 0 0 0 0-1.5h-1.5V3Z"/><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3A5.25 5.25 0 0 0 12 1.5Zm-3.75 5.25v3a4.5 4.5 0 0 0 4.5 4.5h1.5a4.5 4.5 0 0 0 4.5-4.5v-3a3.75 3.75 0 0 0-7.5 0Z" clip-rule="evenodd"/></svg>
+                <p class="font-semibold text-gray-800 dark:text-gray-200 mt-2">{{ t().vocabularyQuiz }}</p>
+              </button>
+            </div>
+          </section>
+
+          <!-- Daily Tips -->
+          <section>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().dailyTips }}</h2>
+            <div class="flex overflow-x-auto pb-4 -mx-6 px-6 snap-x snap-mandatory space-x-4">
+              @for(tip of content.tips; track $index) {
+                <div class="snap-start flex-shrink-0 w-64 h-40 rounded-xl overflow-hidden relative text-white p-4 flex flex-col justify-end bg-cover bg-center shadow-lg hover:-translate-y-1 transition-transform duration-300" [style.background-image]="'url(https://picsum.photos/400/300?random=' + ($index + 1) + ')'">
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                  <div class="relative z-10">
+                    <h3 class="font-bold text-lg">{{ tip.title }}</h3>
+                    <p class="text-sm font-light">{{ tip.description }}</p>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        @if(homeError()) {
+          <div class="text-red-500 dark:text-red-400 text-sm mt-4 text-center p-4 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
+            <p><strong>Error:</strong> {{ homeError() }}</p>
+          </div>
+        }
+      </main>
+
+      <!-- Bottom Navigation -->
+      <footer class="flex-shrink-0 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl border-t border-gray-200 dark:border-gray-700/50 sm:rounded-b-2xl">
+        <nav class="flex justify-around p-2">
+          <button (click)="navigateTo('home')" class="flex flex-col items-center p-2 rounded-lg text-indigo-500 dark:text-indigo-400 w-24">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M12.71 2.29a1 1 0 0 0-1.42 0l-9 9a1 1 0 0 0 0 1.42A1 1 0 0 0 3 13h1v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7h1a1 1 0 0 0 .71-.29a1 1 0 0 0 0-1.42Z"/></svg>
+            <span class="text-xs font-semibold mt-1">{{ t().home }}</span>
+          </button>
+          <button (click)="navigateTo('chatting')" class="flex flex-col items-center p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors w-24">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M.5 14.5a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1V5.41a2 2 0 0 0-.59-1.41L13.41.59A2 2 0 0 0 12 0H2a2 2 0 0 0-2 2v12.5ZM13 2.5L15.5 5H13ZM21.5 8.5a1 1 0 0 0-1 1V19a1 1 0 0 1-1 1H6a1 1 0 0 0 0 2h13a3 3 0 0 0 3-3V9.5a1 1 0 0 0-1-1Z"/></svg>
+            <span class="text-xs font-semibold mt-1">{{ t().chat }}</span>
+          </button>
+        </nav>
+      </footer>
+    </div>
+  }
+  @case ('vocabularyQuiz') {
+    <div class="w-full max-w-xl mx-auto p-8 bg-white/60 dark:bg-gray-800/30 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-lg shadow-indigo-500/10 dark:shadow-2xl dark:shadow-indigo-900/20 animate-fade-in" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      @switch (vocabularyQuizState()) {
+        @case ('generating') {
+          <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">{{ t().generatingQuiz }}</h1>
+            <div class="flex justify-center items-center space-x-2">
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce"></div>
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+              <div class="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mt-4">{{ t().pleaseWait }}</p>
+          </div>
+        }
+        @case ('taking') {
+          @if (currentVocabularyQuestion(); as question) {
+            <div class="text-center">
+               <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">{{ t().vocabularyQuiz }}</h1>
+               <p class="text-gray-500 dark:text-gray-400 mb-6">{{ t().quizProgress.replace('{number}', '' + (currentVocabularyQuestionIndex() + 1)).replace('{total}', '' + vocabularyQuestions().length) }}</p>
+
+              <!-- Progress Bar -->
+              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
+                <div class="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full" [style.width]="vocabularyQuizProgress() + '%'"></div>
+              </div>
+
+              <!-- Question -->
+              <div class="p-6 bg-gray-100 dark:bg-gray-900/50 rounded-lg mb-6 min-h-[8rem] flex items-center justify-center">
+                <p class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ question.question }}</p>
+              </div>
+
+              <!-- Options -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @for (option of question.options; track option) {
+                  <button (click)="selectVocabularyAnswer(option)" [disabled]="isAnswerChecked()" [class]="getOptionClass(option, question.correct_answer)" class="w-full text-left p-4 rounded-lg border transition-all duration-200 font-medium disabled:cursor-not-allowed">
+                    {{ option }}
+                  </button>
+                }
+              </div>
+
+              <!-- Feedback & Next Button -->
+              @if(isAnswerChecked()) {
+                <div class="mt-6 p-4 rounded-lg" [class]="selectedVocabularyAnswer() === question.correct_answer ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'">
+                  @if (selectedVocabularyAnswer() === question.correct_answer) {
+                    <p class="font-bold text-green-700 dark:text-green-300">{{ t().correct }}</p>
+                  } @else {
+                    <p class="font-bold text-red-700 dark:text-red-300">{{ t().incorrect }}</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">{{ t().correctAnswerIs }} <span class="font-semibold">{{ question.correct_answer }}</span></p>
+                  }
+                </div>
+
+                <button (click)="nextVocabularyQuestion()" class="w-full mt-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full py-3 font-semibold hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+                  {{ currentVocabularyQuestionIndex() === vocabularyQuestions().length - 1 ? t().finishTest : t().nextQuestion }}
+                </button>
+              }
+            </div>
+          }
+        }
+        @case ('results') {
+          @if (vocabularyQuizResult(); as result) {
+            <div class="text-center">
+              <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ t().quizComplete }}</h1>
+              <p class="text-lg text-gray-600 dark:text-gray-300 mb-4">{{ t().yourScore }}</p>
+              <div class="inline-block bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-3xl font-bold px-8 py-4 rounded-full mb-6 shadow-lg">
+                {{ result.score }} / {{ result.total }}
+              </div>
+              <p class="text-gray-500 dark:text-gray-400 italic mb-6">"{{ result.feedback }}"</p>
+              
+              @if (result.wordsToReview.length > 0) {
+                <div class="text-left my-8">
+                  <h3 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">{{ t().wordsToReview }}</h3>
+                  <div class="space-y-4 max-h-48 overflow-y-auto pr-2">
+                    @for (word of result.wordsToReview; track word.question) {
+                      <div class="p-4 bg-gray-100 dark:bg-gray-900/50 rounded-lg">
+                        <p class="font-semibold text-gray-800 dark:text-gray-200">"{{ word.question }}"</p>
+                        <p class="text-sm mt-2"><span class="text-red-500">{{ t().incorrect }}: </span><span class="line-through">{{ word.yourAnswer }}</span></p>
+                        <p class="text-sm"><span class="text-green-500">{{ t().correct }}: </span><span class="font-bold">{{ word.correctAnswer }}</span> - {{ word.definition }}</p>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
+              <div class="flex flex-col sm:flex-row gap-4 mt-8">
+                <button (click)="startVocabularyQuiz()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full py-3 font-semibold hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+                  {{ t().tryAgain }}
+                </button>
+                <button (click)="navigateTo('home')" class="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-full py-3 font-semibold hover:from-gray-600 hover:to-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-slate-900 transition-all duration-300 transform hover:scale-105">
+                  {{ t().home }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      }
+      @if(homeError()) {
+        <div class="text-red-500 dark:text-red-400 text-sm mt-4 text-center p-4 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
+          <p><strong>Error:</strong> {{ homeError() }}</p>
+        </div>
+      }
+    </div>
+  }
+  @case ('chatting') {
+    <div class="flex flex-col h-full sm:h-auto sm:max-h-[calc(100vh-4rem)] w-full max-w-2xl mx-auto bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl rounded-none sm:rounded-2xl sm:my-8 border border-gray-300 dark:border-gray-700/50 shadow-lg shadow-indigo-500/20 dark:shadow-2xl dark:shadow-indigo-900/50 overflow-hidden animate-fade-in" [dir]="uiLanguage() === 'fa' ? 'rtl' : 'ltr'">
+      <!-- Header -->
+      <header class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700/50 flex-shrink-0 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+        <div class="flex items-center flex-1">
+          <button (click)="navigateTo('home')" class="text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors p-2 rounded-full" [title]="t().backToHome" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+            @if (uiLanguage() === 'fa') {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+            } @else {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            }
+          </button>
+          <div class="flex items-center">
+              <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white" [class.mr-4]="uiLanguage() === 'en'" [class.ml-4]="uiLanguage() === 'fa'">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="12" width="16" height="8" rx="2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M17 12v-2a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v2"/><path d="M7 12v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+              </div>
+              <div>
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ t().aiAssistant }}</h1>
+                <p class="text-sm text-green-500 dark:text-green-400 flex items-center">
+                  <span class="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full animate-pulse" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'"></span>
+                  {{ t().online }}
+                </p>
+              </div>
+          </div>
+        </div>
+        <div class="flex items-center" [class.space-x-2]="uiLanguage() === 'en'" [class.space-x-reverse]="uiLanguage() === 'fa'">
+          <button (click)="toggleTheme()" class="text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-yellow-300 transition-colors p-2 rounded-full" [title]="theme() === 'dark' ? t().toggleThemeLight : t().toggleThemeDark">
+            @if (theme() === 'dark') {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            } @else {
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+            }
+          </button>
+          <button (click)="clearChat()" class="text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full" [title]="t().clearChat">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </header>
+    
+      <!-- Messages Area -->
+      <main #chatContainer class="flex-1 p-6 overflow-y-auto">
+        <div class="flex flex-col space-y-4">
+          @for (message of messages(); track $index) {
+            <div class="flex" [class.justify-end]="message.role === 'user'">
+              @if (message.role === 'model') {
+                <div class="flex items-end max-w-lg group">
+                  <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="12" width="16" height="8" rx="2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M17 12v-2a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v2"/><path d="M7 12v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                  </div>
+                  <div class="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 p-3 rounded-2xl rounded-bl-none relative">
+                    <div class="text-sm prose prose-sm max-w-none" [class.prose-invert]="theme() === 'dark'" [innerHTML]="renderMessage(message.text)" dir="ltr"></div>
+                     <button (click)="speak(message.text)" [title]="t().speakText" class="absolute -bottom-3 -right-3 text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all duration-200 opacity-0 group-hover:opacity-100 focus:opacity-100" [class.opacity-100]="currentlySpeakingText() === message.text">
+                        @if(currentlySpeakingText() === message.text) {
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 animate-pulse" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 10.5a1.5 1.5 0 0 0 3 0v-6a1.5 1.5 0 0 0-3 0v6ZM12 11.25a.75.75 0 0 0 1.5 0v-7.5a.75.75 0 0 0-1.5 0v7.5ZM9 9a.75.75 0 0 1-1.5 0V7.5a.75.75 0 0 1 1.5 0V9Zm9 1.5a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-1.5 0v4.5Zm-3-1.5a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 1.5 0V9Z"/><path fill-rule="evenodd" d="M20.25 10.5a.75.75 0 0 0-1.5 0v6a.75.75 0 0 0 1.5 0v-6ZM3.75 12a.75.75 0 0 1 0-1.5h16.5a.75.75 0 0 1 0 1.5H3.75Z" clip-rule="evenodd"/></svg>
+                        } @else {
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M8.25 4.5a3.75 3.75 0 0 1 7.5 0v4.5a3.75 3.75 0 0 1-7.5 0V4.5Z" /><path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 0 1-12 0v-.75A.75.75 0 0 1 6 10.5Z" /><path d="M12 15a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 15Z" /></svg>
+                        }
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                <div class="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-3 rounded-2xl rounded-br-none max-w-lg">
+                  <p class="text-sm">{{ message.text }}</p>
+                </div>
+              }
+            </div>
+          }
+    
+          @if (isLoading()) {
+            <div class="flex items-end max-w-lg">
+               <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" [class.mr-2]="uiLanguage() === 'en'" [class.ml-2]="uiLanguage() === 'fa'">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="12" width="16" height="8" rx="2"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M17 12v-2a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v2"/><path d="M7 12v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+              </div>
+              <div class="bg-gray-200 dark:bg-slate-700 p-3 rounded-2xl rounded-bl-none">
+                <div class="flex items-center justify-center space-x-1">
+                  <div class="w-2 h-2 bg-gray-400 dark:bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div class="w-2 h-2 bg-gray-400 dark:bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div class="w-2 h-2 bg-gray-400 dark:bg-slate-400 rounded-full animate-bounce"></div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </main>
+    
+      <!-- Input Area -->
+      <footer class="p-4 border-t border-gray-200 dark:border-gray-700/50 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm flex-shrink-0">
+        @if (error()) {
+          <div class="text-red-500 dark:text-red-400 text-sm mb-2 text-center p-2 bg-red-100 dark:bg-red-900/30 rounded-md border border-red-200 dark:border-red-500/30">
+            <p><strong>Error:</strong> {{ error() }}</p>
+          </div>
+        }
+        <div class="flex items-center space-x-3" [class.space-x-reverse]="uiLanguage() === 'fa'">
+          @if (speechSupported()) {
+             <button
+              [title]="isRecording() ? t().stopRecording : t().startRecording"
+              (click)="toggleRecording()"
+              [disabled]="isLoading()"
+              class="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed transition-colors p-3 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700">
+                @if (isRecording()) {
+                  <span class="relative flex h-6 w-6">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="relative inline-flex h-6 w-6 text-red-500"><path fill-rule="evenodd" d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3-3h-9a3 3 0 0 1-3-3v-9Z" clip-rule="evenodd" /></svg>
+                  </span>
+                } @else {
+                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path d="M8.25 4.5a3.75 3.75 0 0 1 7.5 0v4.5a3.75 3.75 0 0 1-7.5 0V4.5Z" /><path d="M6 10.5a.75.75 0 0 1 .75.75v.75a4.5 4.5 0 0 0 9 0v-.75a.75.75 0 0 1 1.5 0v.75a6 6 0 0 1-12 0v-.75A.75.75 0 0 1 6 10.5Z" /><path d="M12 15a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 15Z" /></svg>
+                }
+             </button>
+          }
+          <input
+            type="text"
+            [placeholder]="t().typeYourMessage"
+            class="flex-1 w-full px-4 py-2 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-full text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow duration-200"
+            [value]="userInput()"
+            (input)="onUserInput($event)"
+            (keyup.enter)="sendMessage()"
+            [disabled]="isLoading()"
+          />
+          <button
+            class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-full p-3 hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900 disabled:from-gray-500 dark:disabled:from-gray-600 disabled:to-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-110 flex items-center justify-center"
+            (click)="sendMessage()"
+            [disabled]="isLoading() || !userInput()">
+            <!-- Send Icon SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+            </svg>
+          </button>
+        </div>
+      </footer>
+    </div>
+  }
+}`,
+      changeDetection: ChangeDetectionStrategy.OnPush,
+      host: {
+        '[class]': 'hostClasses()',
+      },
+    })
+    class AppComponent {
+      appState = signal<AppState>('loading');
+      uiLanguage = signal<'en' | 'fa'>('en');
+      theme = signal<Theme>('dark');
+      userName = signal<string>('');
+      messages = signal<Message[]>([]);
+      userInput = signal<string>('');
+      isLoading = signal<boolean>(false);
+      error = signal<string | null>(null);
+      chatContainer = viewChild<ElementRef>('chatContainer');
+      
+      // Home screen state
+      homeContent = signal<HomeContent | null>(null);
+      homeIsLoading = signal<boolean>(false);
+      homeError = signal<string | null>(null);
+
+      // Placement Test State
+      englishLevel = signal<EnglishLevel | null>(null);
+      placementTestState = signal<PlacementTestState>('generating');
+      testQuestions = signal<QuizQuestion[]>([]);
+      currentQuestionIndex = signal<number>(0);
+      userAnswers = signal<(string | null)[]>([]);
+      selectedAnswer = signal<string | null>(null);
+      testResult = signal<TestResult | null>(null);
+
+      // Vocabulary Quiz State
+      vocabularyQuizState = signal<VocabularyQuizState>('generating');
+      vocabularyQuestions = signal<VocabularyQuizQuestion[]>([]);
+      currentVocabularyQuestionIndex = signal<number>(0);
+      selectedVocabularyAnswer = signal<string | null>(null);
+      userVocabularyAnswers = signal<(string | null)[]>([]);
+      vocabularyQuizResult = signal<QuizResultSummary | null>(null);
+      isAnswerChecked = signal<boolean>(false);
+
+      // Speech Recognition and Synthesis
+      isRecording = signal<boolean>(false);
+      currentlySpeakingText = signal<string | null>(null);
+      speechSupported = signal<boolean>(!!SpeechRecognition);
+      private recognition: any | null = null;
+
+      t = computed(() => translations[this.uiLanguage()]);
+      currentQuestion = computed(() => this.testQuestions()[this.currentQuestionIndex()]);
+      testProgress = computed(() => this.testQuestions().length > 0 ? ((this.currentQuestionIndex()) / this.testQuestions().length) * 100 : 0);
+      
+      currentVocabularyQuestion = computed(() => this.vocabularyQuestions()[this.currentVocabularyQuestionIndex()]);
+      vocabularyQuizProgress = computed(() => this.vocabularyQuestions().length > 0 ? ((this.currentVocabularyQuestionIndex() + 1) / this.vocabularyQuestions().length) * 100 : 0);
+
+      hostClasses = computed(() => {
+        const state = this.appState();
+        if (state === 'chatting' || state === 'home') {
+          return 'flex justify-center h-screen w-full bg-gray-100 dark:bg-slate-900';
+        }
+        return 'flex items-center justify-center h-screen p-4 bg-gray-100 dark:bg-slate-900';
+      });
+
+      private chat!: Chat;
+      private ai!: GoogleGenAI;
+      private sanitizer = inject(DomSanitizer);
+
+      constructor() {
+        this.initializeTheme();
+        this.initializeSpeechRecognition();
+
+        const storedName = localStorage.getItem('userName');
+        const storedLang = localStorage.getItem('uiLanguage') as 'en' | 'fa' | null;
+        const storedLevel = localStorage.getItem('englishLevel') as EnglishLevel | null;
+
+        if (storedName && storedLang) {
+          this.userName.set(storedName);
+          this.uiLanguage.set(storedLang);
+          if (storedLevel) {
+            this.englishLevel.set(storedLevel);
+            this.appState.set('home');
+          } else {
+            this.appState.set('placementTest');
+          }
+        } else {
+          this.appState.set('languageSelection');
+        }
+
+        effect(() => {
+          if (this.messages().length && this.chatContainer()) {
+            this.scrollToBottom();
+          }
+        });
+
+        effect(() => {
+          const state = this.appState();
+          if ((state === 'home' || state === 'chatting') && this.userName() && !this.chat) {
+            this.initializeChat();
+          }
+          if (state === 'home' && !this.homeContent() && !this.homeIsLoading()) {
+            this.loadHomeContent();
+          }
+          if (state === 'placementTest' && this.testQuestions().length === 0) {
+            this.generatePlacementTest();
+          }
+        });
+        
+        effect(() => {
+          if (this.messages().length > 0) {
+            localStorage.setItem('chatHistory', JSON.stringify(this.messages()));
+          }
+        });
+        
+        effect(() => {
+          const currentTheme = this.theme();
+          if (currentTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          localStorage.setItem('theme', currentTheme);
+        });
+      }
+
+      private getAiClient(): GoogleGenAI {
+        if (!this.ai) {
+          if (!process.env.API_KEY) {
+            const errorMsg = 'API key not configured. Please set API_KEY.';
+            // Set error state for both chat and home contexts
+            this.error.set(errorMsg);
+            this.homeError.set(errorMsg);
+            throw new Error(errorMsg);
+          }
+          this.ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+        }
+        return this.ai;
+      }
+
+      initializeTheme() {
+        const storedTheme = localStorage.getItem('theme') as Theme | null;
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        this.theme.set(storedTheme || (prefersDark ? 'dark' : 'light'));
+      }
+
+      toggleTheme() {
+        this.theme.update(current => (current === 'dark' ? 'light' : 'dark'));
+      }
+
+      selectLanguage(lang: 'en' | 'fa'): void {
+        this.uiLanguage.set(lang);
+        localStorage.setItem('uiLanguage', lang);
+        this.appState.set('onboarding');
+      }
+      
+      navigateTo(view: 'home' | 'chatting'): void {
+        if (view === 'home') {
+            // Reset quiz state when navigating home
+            this.vocabularyQuestions.set([]);
+        }
+        this.appState.set(view);
+      }
+
+      async initializeChat(): Promise<void> {
+        try {
+          const ai = this.getAiClient();
+          const systemInstruction = `You are a friendly and supportive AI English tutor. The user you are talking to is named ${this.userName()}, and their estimated English proficiency is ${this.englishLevel()}.
+
+          Core Directives:
+          - Language: All your responses MUST be in English.
+          - Adaptability: Tailor the complexity of your vocabulary and sentence structures to the user's ${this.englishLevel()} level.
+            - For Beginners: Use simple words, short sentences, and ask clear, direct questions.
+            - For Intermediate: Introduce more nuanced vocabulary and slightly more complex sentences. Encourage them to elaborate.
+            - For Advanced: Engage in deep, complex conversations. Feel free to use idiomatic expressions (and explain them if necessary).
+          - Corrections: Gently correct major grammatical mistakes. Don't interrupt the flow of conversation for minor errors. Phrase corrections positively, for example: "That's a great point! A slightly more natural way to say that would be..."
+          - Encouragement: Be positive and encouraging. Praise their effort.
+          - Formatting: Use Markdown for formatting (like bolding key terms or using lists) to improve readability.
+          - Greeting: Begin your very first message in a new conversation with a friendly greeting, like "Hi ${this.userName()}! Ready to practice some English today?".`;
+            
+          this.chat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: { systemInstruction },
+          });
+          
+          const storedHistory = localStorage.getItem('chatHistory');
+          if (storedHistory && JSON.parse(storedHistory).length > 0) {
+            this.messages.set(JSON.parse(storedHistory));
+          } else {
+             // Send initial greeting from AI
+            this.isLoading.set(true);
+            const result = await this.chat.sendMessageStream({ message: `Hi, please greet me.` });
+            this.messages.set([{ role: 'model', text: '' }]);
+            let streamingText = '';
+            for await (const chunk of result) {
+              streamingText += chunk.text;
+              this.messages.update(current => {
+                current[0].text = streamingText;
+                return [...current];
+              });
+            }
+            this.isLoading.set(false);
+          }
+        } catch (e) {
+          this.handleError(e);
+        }
+      }
+      
+      handleNameSubmit(event: Event) {
+        event.preventDefault();
+        const form = event.target as HTMLFormElement;
+        const input = form.querySelector('input');
+        const name = input?.value.trim();
+        if (name) {
+          localStorage.setItem('userName', name);
+          this.userName.set(name);
+          this.appState.set('placementTest');
+        }
+      }
+
+      async generatePlacementTest(): Promise<void> {
+        this.homeError.set(null);
+        this.placementTestState.set('generating');
+        try {
+          const ai = this.getAiClient();
+          const schema = {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                correct_answer: { type: Type.STRING },
+              },
+              required: ['question', 'options', 'correct_answer'],
+            },
+          };
+
+          const prompt = `You are an expert English language assessment creator. Generate a 5-question multiple-choice placement test to determine a user's English proficiency. The questions should cover grammar and vocabulary.
+    - Create one question for each of the following CEFR levels, in this order: A1, A2, B1, B2, C1.
+    - Each question must have a 'question' text, an array of exactly 4 string 'options', and the 'correct_answer' string which must be one of the options.
+    - Respond ONLY with a valid JSON array adhering to the provided schema. Do not include any other text or markdown.`;
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: schema,
+            },
+          });
+
+          const questions = JSON.parse(response.text.trim());
+          this.testQuestions.set(questions);
+          this.placementTestState.set('taking');
+        } catch (e) {
+          this.handleError(e, 'home');
+        }
+      }
+
+      selectAnswer(answer: string): void {
+        this.selectedAnswer.set(answer);
+      }
+
+      submitAnswer(): void {
+        if (!this.selectedAnswer()) return;
+
+        this.userAnswers.update(answers => [...answers, this.selectedAnswer()]);
+        
+        if (this.currentQuestionIndex() < this.testQuestions().length - 1) {
+          this.currentQuestionIndex.update(i => i + 1);
+          this.selectedAnswer.set(null);
+        } else {
+          this.evaluateTest();
+        }
+      }
+
+      async evaluateTest(): Promise<void> {
+        this.placementTestState.set('evaluating');
+        this.homeError.set(null);
+        try {
+          const ai = this.getAiClient();
+          const questionsAndAnswers = this.testQuestions().map((q, i) => ({
+            question: q.question,
+            correct_answer: q.correct_answer,
+            user_answer: this.userAnswers()[i]
+          }));
+
+          const schema = {
+            type: Type.OBJECT,
+            properties: {
+              level: { type: Type.STRING, enum: ['Beginner', 'Intermediate', 'Advanced'] },
+              feedback: { type: Type.STRING }
+            },
+            required: ['level', 'feedback']
+          };
+
+          const languageMap = { en: 'English', fa: 'Persian (Farsi)' };
+          const requestedLang = languageMap[this.uiLanguage()];
+
+          const prompt = `You are an expert English language assessment evaluator. A user has completed a placement test.
+          Here are the questions, correct answers, and the user's answers:
+          ${JSON.stringify(questionsAndAnswers)}
+          
+          Based on their performance, determine their English proficiency level. The level must be one of: 'Beginner', 'Intermediate', 'Advanced'.
+          Also, provide a short, encouraging feedback message (max 30 words) for the user in ${requestedLang}.
+          
+          Respond ONLY with a valid JSON object with two keys: 'level' (the determined proficiency level) and 'feedback' (the feedback message). Do not include any other text or markdown.`;
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: schema,
+            },
+          });
+          
+          const result = JSON.parse(response.text.trim()) as TestResult;
+          this.testResult.set(result);
+          this.englishLevel.set(result.level);
+          localStorage.setItem('englishLevel', result.level);
+          this.placementTestState.set('results');
+
+        } catch (e) {
+          this.handleError(e, 'home');
+          this.placementTestState.set('taking'); // Go back to test if evaluation fails
+        }
+      }
+
+      finishTestAndGoHome(): void {
+        this.appState.set('home');
+      }
+
+
+      async loadHomeContent(): Promise<void> {
+        if (!this.userName()) {
+          this.homeError.set('User name not found.');
+          return;
+        }
+        this.homeIsLoading.set(true);
+        this.homeError.set(null);
+
+        try {
+            const ai = this.getAiClient();
+            const languageMap = {
+              en: 'English',
+              fa: 'Persian (Farsi)',
+            };
+            const requestedLang = languageMap[this.uiLanguage()];
+
+            const schema = {
+              type: Type.OBJECT,
+              properties: {
+                tips: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING, description: 'A short, catchy title (max 5 words).' },
+                      description: { type: Type.STRING, description: 'A brief description (max 20 words).' }
+                    },
+                    required: ['title', 'description']
+                  }
+                },
+                challenge: { type: Type.STRING, description: 'A short challenge paragraph (max 50 words).' }
+              },
+              required: ['tips', 'challenge']
+            };
+
+            const prompt = `You are an AI assistant for an English learning app. The user's name is ${this.userName()}, their proficiency is ${this.englishLevel()}, and their selected UI language is ${requestedLang}. Your task is to generate motivational and engaging content for the app's home screen, IN ${requestedLang}.
+    Provide the following in a JSON object:
+    1. 'tips': An array of 3 'Daily Tips' for learning English, tailored to a ${this.englishLevel()} learner. Each tip should have a 'title' and a 'description'.
+    2. 'challenge': A "Today's Challenge", which is a short, actionable task appropriate for a ${this.englishLevel()} user.
+
+    Respond ONLY with a valid JSON object that adheres to the provided schema. Your entire response, including all text in the tips and challenge, MUST be in ${requestedLang}. Do not include any other text or markdown formatting.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: schema,
+                },
+            });
+
+            const jsonString = response.text.trim();
+            const content = JSON.parse(jsonString);
+            this.homeContent.set(content);
+
+        } catch (e) {
+            this.handleError(e, 'home');
+        } finally {
+            this.homeIsLoading.set(false);
+        }
+      }
+
+      async sendMessage(): Promise<void> {
+        const userMessageText = this.userInput();
+        if (!userMessageText.trim() || this.isLoading()) {
+          return;
+        }
+        
+        this.messages.update(current => [
+          ...current,
+          { role: 'user', text: userMessageText },
+        ]);
+        this.userInput.set('');
+        this.isLoading.set(true);
+        this.error.set(null);
+
+        try {
+          const result = await this.chat.sendMessageStream({ message: userMessageText });
+
+          this.messages.update(current => [...current, { role: 'model', text: '' }]);
+          let streamingText = '';
+          for await (const chunk of result) {
+            streamingText += chunk.text;
+            this.messages.update(current => {
+              const lastMessage = current[current.length - 1];
+              lastMessage.text = streamingText;
+              return [...current];
+            });
+          }
+        } catch (e) {
+          this.handleError(e);
+        } finally {
+          this.isLoading.set(false);
+        }
+      }
+      
+      // --- Vocabulary Quiz Methods ---
+
+      startVocabularyQuiz(): void {
+        // Reset state
+        this.vocabularyQuizState.set('generating');
+        this.vocabularyQuestions.set([]);
+        this.currentVocabularyQuestionIndex.set(0);
+        this.selectedVocabularyAnswer.set(null);
+        this.userVocabularyAnswers.set([]);
+        this.vocabularyQuizResult.set(null);
+        this.isAnswerChecked.set(false);
+        this.homeError.set(null);
+
+        this.appState.set('vocabularyQuiz');
+        this.generateVocabularyQuiz();
+      }
+
+      async generateVocabularyQuiz(): Promise<void> {
+        try {
+          const ai = this.getAiClient();
+          const schema = {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                correct_answer: { type: Type.STRING },
+                definition: { type: Type.STRING },
+              },
+              required: ['question', 'options', 'correct_answer', 'definition'],
+            },
+          };
+
+          const prompt = `You are an expert English language assessment creator. Generate a 5-question multiple-choice vocabulary quiz for a user with an English proficiency level of '${this.englishLevel()}'.
+          - Each question should test knowledge of a specific word by providing a definition or a sentence with a blank.
+          - Each item must have: a 'question' text, an array of exactly 4 'options' (plausible distractors), the 'correct_answer' string (must be one of the options), and a short 'definition' of the correct answer.
+          - Respond ONLY with a valid JSON array.`;
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json', responseSchema: schema },
+          });
+
+          const questions = JSON.parse(response.text.trim());
+          this.vocabularyQuestions.set(questions);
+          this.vocabularyQuizState.set('taking');
+        } catch (e) {
+          this.handleError(e, 'home');
+          this.appState.set('home'); // Go home on error
+        }
+      }
+
+      selectVocabularyAnswer(answer: string): void {
+        if (this.isAnswerChecked()) return;
+        this.selectedVocabularyAnswer.set(answer);
+        this.isAnswerChecked.set(true);
+      }
+
+      nextVocabularyQuestion(): void {
+        this.userVocabularyAnswers.update(answers => [...answers, this.selectedVocabularyAnswer()]);
+
+        if (this.currentVocabularyQuestionIndex() < this.vocabularyQuestions().length - 1) {
+          this.currentVocabularyQuestionIndex.update(i => i + 1);
+          this.selectedVocabularyAnswer.set(null);
+          this.isAnswerChecked.set(false);
+        } else {
+          this.showVocabularyQuizResults();
+        }
+      }
+
+      async showVocabularyQuizResults(): Promise<void> {
+        const questions = this.vocabularyQuestions();
+        const userAnswers = this.userVocabularyAnswers();
+        let score = 0;
+        const wordsToReview: { question: string; yourAnswer: string | null; correctAnswer: string; definition: string }[] = [];
+
+        questions.forEach((q, i) => {
+          const userAnswer = userAnswers[i] ?? null;
+          if (q.correct_answer === userAnswer) {
+            score++;
+          } else {
+            wordsToReview.push({
+              question: q.question,
+              yourAnswer: userAnswer,
+              correctAnswer: q.correct_answer,
+              definition: q.definition,
+            });
+          }
+        });
+
+        let feedback = `Good job! You got ${score} out of ${questions.length}.`;
+        try {
+          const ai = this.getAiClient();
+          const languageMap = { en: 'English', fa: 'Persian (Farsi)' };
+          const requestedLang = languageMap[this.uiLanguage()];
+          const prompt = `An English learner at a ${this.englishLevel()} level scored ${score} out of ${questions.length} on a vocabulary quiz. Write a short, encouraging feedback message (max 25 words) in ${requestedLang}. Respond ONLY with the feedback text.`;
+          
+          const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+          feedback = response.text.trim();
+        } catch (e) {
+          console.error("Failed to generate quiz feedback:", e);
+        }
+
+        this.vocabularyQuizResult.set({ score, total: questions.length, feedback, wordsToReview });
+        this.vocabularyQuizState.set('results');
+      }
+
+      getOptionClass(option: string, correctAnswer: string): string {
+        const base = 'bg-white/50 dark:bg-slate-700/50 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600';
+        const hover = 'hover:bg-indigo-100 dark:hover:bg-slate-700';
+        const selected = 'bg-indigo-600 text-white border-transparent ring-2 ring-indigo-400';
+        const correct = '!bg-green-500 !text-white !border-transparent';
+        const incorrect = '!bg-red-500 !text-white !border-transparent';
+        const disabled = 'disabled:opacity-70';
+
+        if (this.isAnswerChecked()) {
+          if (option === correctAnswer) return correct;
+          if (option === this.selectedVocabularyAnswer()) return incorrect;
+          return `${base} ${disabled}`;
+        }
+
+        if (option === this.selectedVocabularyAnswer()) {
+          return selected;
+        }
+
+        return `${base} ${hover}`;
+      }
+
+
+      onUserInput(event: Event): void {
+        const target = event.target as HTMLInputElement;
+        this.userInput.set(target.value);
+      }
+
+      clearChat(): void {
+        if (confirm(this.t().confirmClearChat)) {
+          this.messages.set([]);
+          localStorage.removeItem('chatHistory');
+          this.initializeChat();
+        }
+      }
+
+      public renderMessage(text: string): SafeHtml {
+        return this.sanitizer.bypassSecurityTrustHtml(marked.parse(text) as string);
+      }
+
+      private handleError(e: unknown, context: 'chat' | 'home' = 'chat') {
+        console.error(e);
+        // Avoid setting error if it's a known handled error from getAiClient
+        if (e instanceof Error && e.message.startsWith('API key not configured')) return;
+
+        const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+        const errorMessage = `Failed to get response from AI. ${message}`;
+        if (context === 'home') {
+            this.homeError.set(errorMessage);
+        } else {
+            this.error.set(errorMessage);
+            this.messages.update(current => current.filter(m => m.text !== ''));
+        }
+      }
+      
+      private scrollToBottom(): void {
+        try {
+          const element = this.chatContainer()!.nativeElement;
+          element.scrollTop = element.scrollHeight;
+        } catch (err) {
+          console.error('Could not scroll to bottom:', err);
+        }
+      }
+
+      // --- Speech Recognition and Synthesis Methods ---
+
+      private initializeSpeechRecognition(): void {
+        if (!this.speechSupported()) {
+          console.warn('Speech Recognition is not supported in this browser.');
+          return;
+        }
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'en-US';
+
+        this.recognition.onstart = () => {
+          this.isRecording.set(true);
+        };
+
+        this.recognition.onend = () => {
+          this.isRecording.set(false);
+        };
+
+        this.recognition.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          this.error.set(`Speech recognition error: ${event.error}`);
+        };
+
+        this.recognition.onresult = (event: any) => {
+          let finalTranscript = '';
+          let interimTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          this.userInput.set(this.userInput() + finalTranscript);
+        };
+      }
+
+      toggleRecording(): void {
+        if (!this.recognition) return;
+
+        if (this.isRecording()) {
+          this.recognition.stop();
+        } else {
+          this.userInput.set('');
+          this.recognition.start();
+        }
+      }
+
+      speak(textToSpeak: string): void {
+        if (this.currentlySpeakingText() === textToSpeak) {
+          window.speechSynthesis.cancel();
+          this.currentlySpeakingText.set(null);
+          return;
+        }
+
+        const cleanedText = textToSpeak
+          .replace(/<[^>]*>/g, '') 
+          .replace(/[*_`#]/g, ''); 
+
+        const utterance = new SpeechSynthesisUtterance(cleanedText);
+        utterance.lang = 'en-US';
+
+        utterance.onstart = () => {
+          this.currentlySpeakingText.set(textToSpeak);
+        };
+
+        utterance.onend = () => {
+          this.currentlySpeakingText.set(null);
+        };
+
+        utterance.onerror = (event) => {
+          console.error('Speech synthesis error:', event.error);
+          this.error.set('Sorry, text-to-speech is not available right now.');
+          this.currentlySpeakingText.set(null);
+        };
+
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+    
+    bootstrapApplication(AppComponent, {
+      providers: [provideZonelessChangeDetection()],
+    }).catch((err) => console.error(err));
+  </script>
 </body>
 </html>
